@@ -3,10 +3,11 @@
 Self-hosted, multi-user, offline-first platform for solo tabletop role-playing. First ruleset:
 Ironsworn. No third-party accounts, no mandatory AI, and your campaign data stays on your server.
 
-**Status: Phase 3a — deterministic rules engine, characters and rolls (API).** Accounts, sessions,
-private campaigns, Ironsworn character sheets, and a server-side dice engine with 30 pinned
-mechanics tests. The play loop is not yet usable in a browser: offline storage, sync and the UI
-land in 3b. See [PLAN.md](./PLAN.md) and [docs/rules-coverage.md](./docs/rules-coverage.md).
+**Status: Phase 3b — playable in the browser (online).** Sign in, create a campaign, create a
+character sheet, roll any stat with momentum burning and see the dice and outcome, with permanent
+roll history. The engine is deterministic and tested; the UI talks to the API over the network.
+Offline storage and sync are next (3c), so the app still needs a connection.
+See [PLAN.md](./PLAN.md) and [docs/rules-coverage.md](./docs/rules-coverage.md).
 
 ## Requirements
 
@@ -65,7 +66,7 @@ needed. To point the web app at a different API, set `VITE_API_BASE_URL`.
 
 ```text
 apps/api/          Fastify + Drizzle. Routes, auth, campaigns, characters, rolls.
-apps/web/          React + Vite + Tailwind. Mobile-first shell, PWA manifest.
+apps/web/          React + Vite + Tailwind. Sign-in, campaigns, sheet, rolls; PWA manifest.
 packages/contracts Zod schemas shared by server and browser.
 packages/rules-core      System-agnostic rules types (Rng, Outcome, tracks, moves).
 packages/rules-ironsworn Ironsworn mechanics: dice, momentum, progress, action rolls.
@@ -100,6 +101,16 @@ answers `404`, not `403`.
 
 Errors use one envelope: `{ "error": { "code", "message", "requestId", "details?" } }` with stable
 codes (`bad_request`, `unauthorized`, `not_found`, …). Clients parse codes, never messages.
+
+## Using it
+
+1. Sign in at `/signin` with an account created by the operator (see below).
+2. Create a campaign, open it, create a character sheet.
+3. Pick a stat, add any move adds, optionally burn momentum, and roll. Every roll is stored with
+   its dice; the sheet remembers momentum, meters and debilities.
+
+The UI is mobile-first and works at 390 px without horizontal scroll; desktop uses a two-column
+play view. No AI is involved anywhere in this flow.
 
 ## Accounts
 

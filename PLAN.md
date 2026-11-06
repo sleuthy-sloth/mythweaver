@@ -270,3 +270,37 @@ Findings:
 
 Not in 3a (planned 3b/3c): Dexie storage and outbox, sync push/pull, conflict handling, the
 sign-in and play UI, vows/progress-track persistence, oracles, assets, experience rules.
+
+## Phase 3b delivery record (2026-11-06)
+
+Delivered: a working browser client — sign-in/registration, campaign list and creation, campaign
+page with character sheet (stats, meters, momentum with derived reset/max, debilities), a roll
+panel with stat picker, adds, momentum burning, live result with dice, and permanent roll history.
+The client shares the API contract (Zod) and the Ironsworn rules package for derived values, so
+"momentum reset" in the UI is the same function the server uses.
+
+Evidence:
+
+| Command / check                      | Result                                                                                                                                    |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm --filter @mythweaver/web test` | 7/7 — anonymous redirect, sign-in success and failure, campaign list and empty state, roll result, burned momentum                        |
+| Full suite                           | rules 30, api unit 12, api integration 34, web 7                                                                                          |
+| Browser walkthrough (390×844)        | sign in → campaigns → create "Browser Walkthrough" → create "Sabine" → roll Iron → result `6 vs 3/1 = 9`, strong hit, history row appears |
+| Touch targets                        | stat chips 44 px, steppers 44 px (were 40 and 32)                                                                                         |
+| Layout                               | no horizontal overflow at 390 px; two-column play view at 1280 px                                                                         |
+| `docker compose build web && up -d`  | image rebuilt, web healthy, served through nginx                                                                                          |
+
+Findings:
+
+1. **Tailwind cannot apply opacity modifiers to `var()` colours.** `bg-danger/10`, `border-danger/50`
+   and `placeholder:text-muted/70` either fail the build (inside `@apply`) or silently do nothing
+   (in class strings). Tinted surfaces are now `color-mix()` component classes; this is the kind of
+   styling bug that ships invisibly because nothing errors.
+2. **The web Docker build broke twice for the same reason as the API:** workspace packages must be
+   copied into the build stage. `rules-core` and `rules-ironsworn` are now in both Dockerfiles.
+3. **A hidden ternary bug in the roll card:** `roll.beatenLabel(die)` never existed; dice highlighting
+   is computed from the score now, with burned dice (stored as 0) treated as beaten.
+
+Known UI gaps: the roll panel sits below the character sheet on a phone, so the primary action
+needs a scroll; no PWA install prompt or offline mode yet (3c); no world, vows, oracles or journal
+screens; character creation has no stat-assignment step (defaults, then editable).

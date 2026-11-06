@@ -1,123 +1,59 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { probeApi, type ConnectionState } from './lib/api';
+import type { ReactNode } from 'react';
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { useAuth } from './lib/auth';
+import CampaignPage from './pages/CampaignPage';
+import CampaignsPage from './pages/CampaignsPage';
+import SignInPage from './pages/SignInPage';
 
-const NEXT_UP = [
-  { title: 'Campaigns', detail: 'Private by default, owned by an account, exported at any time.' },
-  {
-    title: 'Characters',
-    detail: 'Ironsworn stats, momentum, vows and assets — deterministic rolls.',
-  },
-  { title: 'World', detail: 'NPCs, factions, places and a journal that links back to every roll.' },
-];
+function RequireAuth({ children }: { children: ReactNode }) {
+  const { status } = useAuth();
+  const location = useLocation();
 
-function StatusPill({ state }: { state: ConnectionState }) {
-  if (state.kind === 'checking') {
+  if (status === 'loading') {
     return (
-      <span className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-sm text-muted">
-        <span className="size-2 animate-pulse rounded-full bg-muted motion-reduce:animate-none" />
-        Checking the table…
-      </span>
+      <p className="py-10 text-sm text-muted" role="status">
+        Checking your session…
+      </p>
     );
   }
 
-  if (state.kind === 'offline') {
-    return (
-      <span className="inline-flex items-center gap-2 rounded-full border border-danger/40 bg-danger/10 px-3 py-1 text-sm text-danger">
-        <span aria-hidden="true" className="size-2 rounded-full bg-danger" />
-        API unreachable
-      </span>
-    );
+  if (status === 'anonymous') {
+    return <Navigate to="/signin" replace state={{ from: location.pathname }} />;
   }
 
-  const databaseOk = state.database.status === 'ok';
-  return (
-    <span
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${
-        databaseOk
-          ? 'border-success/40 bg-success/10 text-success'
-          : 'border-danger/40 bg-danger/10 text-danger'
-      }`}
-    >
-      <span
-        aria-hidden="true"
-        className={`size-2 rounded-full ${databaseOk ? 'bg-success' : 'bg-danger'}`}
-      />
-      {databaseOk ? 'API online' : 'API up, database down'}
-    </span>
-  );
+  return <>{children}</>;
 }
 
-function StatusCard({ state, onRetry }: { state: ConnectionState; onRetry: () => void }) {
+function Header() {
+  const { status, user, signOut } = useAuth();
+
   return (
-    <section className="card" aria-labelledby="status-heading">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="status-heading" className="font-display text-xl">
-          Foundation check
-        </h2>
-        <StatusPill state={state} />
-      </div>
+    <header className="border-b border-border">
+      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-5 py-3">
+        <Link to="/" className="font-display text-lg tracking-tight">
+          Mythweaver
+        </Link>
 
-      <div aria-live="polite" className="mt-3 space-y-1 text-sm text-muted">
-        {state.kind === 'checking' && <p>Asking the server whether it can reach PostgreSQL.</p>}
-        {state.kind === 'online' && (
-          <>
-            <p>
-              API v{state.version} answered
-              {state.database.latencyMs !== undefined
-                ? `, database round trip ${state.database.latencyMs} ms.`
-                : '.'}
-            </p>
-            <p>
-              Accounts, sessions and private campaign storage are live. The game itself — moves,
-              dice, oracles — lands in Phase 3.
-            </p>
-          </>
-        )}
-        {state.kind === 'offline' && (
-          <>
-            <p>
-              No API answered. Start it with <code className="code">pnpm dev:api</code>.
-            </p>
-            <p className="text-xs">Details: {state.message}</p>
-          </>
-        )}
+        {status === 'authenticated' ? (
+          <div className="flex items-center gap-3 text-sm">
+            <span className="hidden text-muted sm:inline">{user.displayName}</span>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                void signOut();
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        ) : null}
       </div>
-
-      <button type="button" onClick={onRetry} className="btn mt-4">
-        Check again
-      </button>
-    </section>
+    </header>
   );
 }
 
 export default function App() {
-  const [state, setState] = useState<ConnectionState>({ kind: 'checking' });
-  const controllerRef = useRef<AbortController | null>(null);
-
-  /**
-   * Retrying aborts the previous probe. Without that, a slow first request can resolve after
-   * a newer one and overwrite fresher state — the UI would show a stale verdict.
-   */
-  const check = useCallback(() => {
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-
-    setState({ kind: 'checking' });
-    probeApi(controller.signal)
-      .then((next) => {
-        if (!controller.signal.aborted) setState(next);
-      })
-      .catch(() => {
-        /* aborted: a newer probe owns the state */
-      });
-  }, []);
-
-  useEffect(() => {
-    check();
-    return () => controllerRef.current?.abort();
-  }, [check]);
-
   return (
     <div className="min-h-dvh">
       <a
@@ -127,40 +63,35 @@ export default function App() {
         Skip to content
       </a>
 
-      <header className="mx-auto w-full max-w-3xl px-5 pb-2 pt-8">
-        <p className="text-xs uppercase tracking-[0.2em] text-muted">Self-hosted solo RPG</p>
-        <h1 className="mt-1 font-display text-4xl leading-tight">Mythweaver</h1>
-        <p className="mt-2 max-w-prose text-sm text-muted">
-          One player, one ruleset, your own server. No account with anyone else, no AI required.
-        </p>
-      </header>
+      <Header />
 
-      <main id="main" className="mx-auto w-full max-w-3xl space-y-4 px-5 py-4 pb-16">
-        <StatusCard state={state} onRetry={() => check()} />
-
-        <section className="card" aria-labelledby="next-heading">
-          <h2 id="next-heading" className="font-display text-xl">
-            What arrives next
-          </h2>
-          <ul className="mt-3 divide-y divide-border">
-            {NEXT_UP.map((item) => (
-              <li key={item.title} className="py-3 first:pt-0 last:pb-0">
-                <p className="font-medium">{item.title}</p>
-                <p className="text-sm text-muted">{item.detail}</p>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-4 text-xs text-muted">
-            These are interfaces still to come, not screens that exist. The API behind them is real,
-            with tests; the UI for accounts and campaigns is next.
-          </p>
-        </section>
+      <main id="main" className="mx-auto w-full max-w-5xl px-5 py-6 pb-16">
+        <Routes>
+          <Route path="/signin" element={<SignInPage />} />
+          <Route
+            path="/"
+            element={
+              <RequireAuth>
+                <CampaignsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/campaigns/:id"
+            element={
+              <RequireAuth>
+                <CampaignPage />
+              </RequireAuth>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
 
-      <footer className="mx-auto w-full max-w-3xl px-5 pb-8 text-xs text-muted">
+      <footer className="mx-auto w-full max-w-5xl px-5 pb-8 text-xs text-muted">
         <p>
           Mythweaver is independent software. Ironsworn is by Shawn Tomkin; its SRD content is used
-          under CC BY 4.0 and attributed in the app when it ships.
+          under CC BY 4.0 and attributed when it ships.
         </p>
       </footer>
     </div>

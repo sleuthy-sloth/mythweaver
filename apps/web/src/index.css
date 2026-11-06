@@ -13,6 +13,7 @@
     --mw-border: #d9cbb4;
     --mw-danger: #9a2f2f;
     --mw-success: #2f6b45;
+    --mw-warning: #7a5314;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -26,6 +27,7 @@
       --mw-border: #38312a;
       --mw-danger: #e58a8a;
       --mw-success: #86c9a2;
+      --mw-warning: #e0b877;
     }
   }
 
@@ -55,16 +57,114 @@
 }
 
 @layer components {
+  .panel,
   .card {
     @apply rounded-xl border border-border bg-surface p-5 shadow-sm;
   }
 
   .btn {
-    @apply inline-flex min-h-11 items-center justify-center rounded-lg border border-border px-4 py-2
-      text-sm font-medium text-ink transition-colors hover:border-accent hover:text-accent;
+    @apply inline-flex min-h-11 items-center justify-center rounded-lg border px-4 py-2
+      text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply border-accent bg-accent text-canvas hover:opacity-90;
+  }
+
+  .btn-secondary {
+    @apply border-border text-ink hover:border-accent hover:text-accent;
+  }
+
+  /* Tailwind cannot apply an opacity modifier to a var()-based colour, so tinted
+     surfaces are written as color-mix instead of `bg-danger/10`. */
+  .btn-danger {
+    @apply border-danger text-danger;
+  }
+
+  .btn-danger:hover {
+    background: color-mix(in srgb, var(--mw-danger) 12%, transparent);
+  }
+
+  .alert {
+    @apply rounded-lg border px-3 py-2 text-sm;
+    border-color: var(--mw-danger);
+    color: var(--mw-danger);
+    background: color-mix(in srgb, var(--mw-danger) 12%, transparent);
+  }
+
+  .inset {
+    @apply border border-border;
+    background: color-mix(in srgb, var(--mw-canvas) 60%, transparent);
+  }
+
+  .chip,
+  .chip-selected {
+    @apply min-h-11 rounded-lg border px-3 text-sm;
+  }
+
+  .chip {
+    @apply border-border text-muted hover:text-ink;
+  }
+
+  .chip-selected {
+    @apply border-accent text-accent;
+    background: color-mix(in srgb, var(--mw-accent) 12%, transparent);
+  }
+
+  .btn-ghost {
+    @apply border-transparent text-muted hover:text-ink;
+  }
+
+  .input {
+    @apply min-h-11 w-full rounded-lg border border-border bg-canvas px-3 py-2 text-base
+      text-ink placeholder:text-muted;
   }
 
   .code {
     @apply rounded bg-canvas px-1.5 py-0.5 font-mono text-xs;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium;
+  }
+
+  /* Colour is decoration; the badge always carries the outcome as a word. */
+  .badge-strong_hit {
+    color: var(--mw-success);
+    border-color: var(--mw-success);
+    background: color-mix(in srgb, var(--mw-success) 10%, transparent);
+  }
+
+  .badge-weak_hit {
+    color: var(--mw-warning);
+    border-color: var(--mw-warning);
+    background: color-mix(in srgb, var(--mw-warning) 10%, transparent);
+  }
+
+  .badge-miss {
+    color: var(--mw-danger);
+    border-color: var(--mw-danger);
+    background: color-mix(in srgb, var(--mw-danger) 10%, transparent);
+  }
+
+  .die {
+    @apply flex size-11 items-center justify-center rounded-lg border border-border
+      bg-canvas font-mono text-lg;
+  }
+
+  .die-beaten {
+    border-color: var(--mw-success);
+    color: var(--mw-success);
+  }
+
+  .die-action {
+    border-color: var(--mw-accent);
+    color: var(--mw-accent);
+  }
+
+  /* 44px minimum: below this, a thumb misses the control on a phone. */
+  .stepper {
+    @apply flex size-11 items-center justify-center rounded-md border border-border text-lg
+      leading-none text-muted hover:border-accent hover:text-accent disabled:opacity-40;
   }
 }

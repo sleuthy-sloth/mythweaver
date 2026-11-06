@@ -70,9 +70,10 @@ Authorization is enforced by the query, not by middleware: `getCampaignForUser` 
   values and ask the player. No last-write-wins on game state.
 - Deletions propagate as tombstones; the server is the arbiter of canonical revisions.
 
-## Known gaps after Phase 2
+## Known gaps after Phase 3b
 
-- The SPA has no sign-in or campaign UI; the shell still reports API state only.
+- No offline mode or service worker yet; the app requires the API (Phase 3c).
+- No world, vows, oracle or journal screens.
 - No password change, reset, email verification, 2FA or account deletion.
 - Sharing endpoints are not exposed, though `campaign_members` already models owner/editor/viewer.
 - No service worker yet; offline boot arrives with the Dexie work in Phase 3.
