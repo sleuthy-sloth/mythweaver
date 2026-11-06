@@ -3,11 +3,12 @@
 Self-hosted, multi-user, offline-first platform for solo tabletop role-playing. First ruleset:
 Ironsworn. No third-party accounts, no mandatory AI, and your campaign data stays on your server.
 
-**Status: Phase 3b — playable in the browser (online).** Sign in, create a campaign, create a
-character sheet, roll any stat with momentum burning and see the dice and outcome, with permanent
-roll history. The engine is deterministic and tested; the UI talks to the API over the network.
-Offline storage and sync are next (3c), so the app still needs a connection.
-See [PLAN.md](./PLAN.md) and [docs/rules-coverage.md](./docs/rules-coverage.md).
+**Status: Phase 3c — offline-first.** Sign in, open a campaign, play with the network gone, and
+your edits and rolls queue and send themselves when you reconnect. The shell is installed by a
+service worker, so the app boots without a connection; campaign data lives in IndexedDB and rolls
+made offline are re-derived by the server from the dice you rolled.
+See [PLAN.md](./PLAN.md), [docs/rules-coverage.md](./docs/rules-coverage.md) and
+[docs/offline.md](./docs/offline.md).
 
 ## Requirements
 
@@ -112,6 +113,21 @@ codes (`bad_request`, `unauthorized`, `not_found`, …). Clients parse codes, ne
 
 The UI is mobile-first and works at 390 px without horizontal scroll; desktop uses a two-column
 play view. No AI is involved anywhere in this flow.
+
+## Playing offline
+
+The app installs a service worker that precaches the shell, and keeps your campaigns, sheets and
+rolls in IndexedDB. Open a campaign once with a connection and it is available on that device.
+
+- Edits and rolls made offline are queued in a durable outbox and replayed on reconnect, in order.
+- Offline rolls use the browser's CSPRNG; the dice travel with the queued roll and the server
+  recomputes the outcome rather than trusting a claimed result (`source: "client"` on the record).
+- A write based on an outdated revision comes back as a conflict and asks you which value to keep,
+  instead of silently overwriting.
+- The strip at the top of a campaign says when you are offline and how many changes are waiting.
+
+Not yet: creating a campaign offline, and syncing between two devices (each device has its own
+cache; the server is the meeting point).
 
 ## Accounts
 

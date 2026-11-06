@@ -330,3 +330,41 @@ Measured after the fix: primary button 6.12:1, body/eyebrow text 5.57:1, heading
 horizontal overflow at 390 px, 44 px steppers/chips, 17-segment gauge, three dice, equal stat
 columns. The visual judgement (does it feel crafted?) still needs a human eye; screenshots were
 reviewed by the user, not by the agent.
+
+## Phase 3c delivery record (2026-11-06)
+
+Delivered: an offline-first client. A Workbox service worker precaches the shell; Dexie caches
+campaigns, characters and rolls; a durable outbox replays queued writes with the operation id as
+the Idempotency-Key. The server gained idempotent POSTs, `baseRevision` conflict detection, and
+acceptance of client dice that it re-derives.
+
+Evidence (run on this host):
+
+| Check                   | Result                                                                                                                                                      |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm test`             | rules 30, api unit 12, web 14 (8 for the outbox)                                                                                                            |
+| `pnpm test:integration` | 44/44 — adds idempotency, offline dice, stale-revision conflicts                                                                                            |
+| Offline shell boot      | with the network cut, a reload renders the app (sign-in screen), not the browser error page; `workbox-precache` populated                                   |
+| Offline edit            | health pips 15 → 14 with no connection; strip reads "Offline · playing from this device. 2 changes will send when you reconnect."                           |
+| Offline roll            | "Miss · match", action die 4 vs 8/8, computed locally with `crypto.getRandomValues`                                                                         |
+| Reconnect               | strip drains; history shows the roll; server row is `action_die 4, challenge 8/8, score 7, miss, match, source=client`; character is `health 4, revision 2` |
+
+Findings:
+
+1. **A stale container looked like a client bug.** Opening a campaign failed with a Zod error on the
+   rolls list, and the page said "not stored on this device yet". The deployed API image predated the
+   `source` column, so the client's contract check correctly refused the payload. Rebuilding the API
+   fixed it. Lesson recorded here because the symptom pointed at the wrong component: rebuild _both_
+   images when a contract changes, not just the one being edited.
+2. **The first failure message was misleading.** With no cache and no network the page claimed
+   "Campaign not found"; it now distinguishes "never stored on this device" from a real 404.
+3. **Cache reads must be optional.** In a browser with IndexedDB unavailable the page failed to load
+   at all until the cache block was wrapped; the network path is the fallback, not the cache.
+4. **Hooks cannot sit after an early return.** The first version of SyncBar called `useEffect` after
+   a conditional `return null`, which React rejects at runtime; the order was corrected.
+5. **Late async work needs a mounted guard.** The campaign page loads cache then network, so a
+   navigation could land state on an unmounted tree; tests caught it as a teardown error.
+
+Known gaps: no offline campaign creation; no cross-device sync protocol (each device caches
+independently and the server is the meeting point); the conflict UI has unit coverage but has not
+been drilled by hand; journals, vows and world entities are still Phase 4.

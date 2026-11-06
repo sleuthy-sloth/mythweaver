@@ -134,8 +134,13 @@ export default function CampaignPage() {
     } catch (caught) {
       // A network failure with a cached copy is not an error worth shouting about; without one,
       // say plainly that the campaign has never been stored on this device.
-      if (caught instanceof ApiError) fail(caught);
-      else if (mounted.current) setUnavailableOffline(true);
+      if (caught instanceof ApiError) {
+        fail(caught);
+      } else {
+        // No server answer at all. Logged because the alternative is a silent blank page.
+        console.error('campaign load failed', caught);
+        if (mounted.current) setUnavailableOffline(true);
+      }
     } finally {
       if (mounted.current) setLoading(false);
     }
