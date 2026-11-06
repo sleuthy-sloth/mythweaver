@@ -49,6 +49,8 @@ type RequestOptions = {
   body?: unknown;
   /** Skip the CSRF header for the two endpoints that are exempt server-side. */
   anonymousMutation?: boolean;
+  /** Replayed outbox writes send the operation id, so a duplicate delivery is collapsed. */
+  idempotencyKey?: string;
 };
 
 /**
@@ -68,6 +70,7 @@ async function request<T>(
   if (method !== 'GET' && !options.anonymousMutation && csrf) {
     headers['x-csrf-token'] = csrf;
   }
+  if (options.idempotencyKey) headers['idempotency-key'] = options.idempotencyKey;
 
   const response = await fetch(`${BASE}${path}`, {
     method,
@@ -143,14 +146,24 @@ export const api = {
       body: input,
     }),
 
-  updateCharacter: (campaignId: string, characterId: string, input: UpdateCharacterRequest) =>
+  updateCharacter: (
+    campaignId: string,
+    characterId: string,
+    input: UpdateCharacterRequest,
+    idempotencyKey?: string,
+  ) =>
     request(`/campaigns/${campaignId}/characters/${characterId}`, CharacterSchema, {
       method: 'PATCH',
       body: input,
+      ...(idempotencyKey ? { idempotencyKey } : {}),
     }),
 
-  roll: (campaignId: string, input: RollRequest) =>
-    request(`/campaigns/${campaignId}/rolls`, RollSchema, { method: 'POST', body: input }),
+  roll: (campaignId: string, input: RollRequest, idempotencyKey?: string) =>
+    request(`/campaigns/${campaignId}/rolls`, RollSchema, {
+      method: 'POST',
+      body: input,
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+    }),
 
   listRolls: (campaignId: string, limit = 20) =>
     request(`/campaigns/${campaignId}/rolls?limit=${limit}`, RollListResponseSchema),

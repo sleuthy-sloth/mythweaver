@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import type { Campaign, Character, Roll } from '@mythweaver/contracts';
 import {
@@ -6,6 +6,7 @@ import {
   MIN_MOMENTUM,
   maxMomentum,
   momentumReset,
+  resolveActionDice,
   STATS,
 } from '@mythweaver/rules-ironsworn';
 import {
@@ -20,8 +21,18 @@ import {
   StatFigure,
   TextInput,
 } from '../components/ui';
+import SyncBar from '../components/SyncBar';
 import { describeError, useAuth } from '../lib/auth';
+import {
+  getCampaign as readCachedCampaign,
+  getCharacters as readCachedCharacters,
+  getRolls as readCachedRolls,
+  putCampaign,
+  putCharacter,
+  putRoll,
+} from '../lib/db';
 import { ApiError, api } from '../lib/http';
+import { enqueue } from '../lib/sync';
 
 const STAT_LABEL: Record<(typeof STATS)[number], string> = {
   edge: 'Edge',
@@ -47,6 +58,8 @@ export default function CampaignPage() {
   const [lastRoll, setLastRoll] = useState<Roll | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Network failed and this campaign was never cached: different problem from a 404. */
+  const [unavailableOffline, setUnavailableOffline] = useState(false);
 
   const [newName, setNewName] = useState('');
   const [stat, setStat] = useState<(typeof STATS)[number]>('iron');
@@ -56,6 +69,16 @@ export default function CampaignPage() {
   const [confirmName, setConfirmName] = useState('');
 
   const character = characters[0] ?? null;
+
+  // React 18 warns when a late response updates an unmounted tree; this page loads from cache and
+  // network in sequence, so it can finish after navigation.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const fail = useCallback(
     (caught: unknown) => {
@@ -68,20 +91,53 @@ export default function CampaignPage() {
     [handleUnauthorized],
   );
 
+  /**
+   * Cache first, network second. The sheet paints from IndexedDB immediately and the fresh copy
+   * replaces it when it arrives; offline, the cached copy is simply what you play from.
+   */
   const load = useCallback(async () => {
+    // The cache is an optimisation, never a requirement: if IndexedDB is unavailable (private
+    // mode, storage disabled) the page still works straight from the network.
+    try {
+      const [cachedCampaign, cachedCharacters, cachedRolls] = await Promise.all([
+        readCachedCampaign(id),
+        readCachedCharacters(id),
+        readCachedRolls(id),
+      ]);
+
+      if (cachedCampaign && mounted.current) {
+        setCampaign(cachedCampaign);
+        setCharacters(cachedCharacters);
+        setRolls(cachedRolls);
+        setLoading(false);
+      }
+    } catch {
+      /* no local database: continue with the network request below */
+    }
+
     try {
       const [campaignResult, characterResult, rollResult] = await Promise.all([
         api.getCampaign(id),
         api.listCharacters(id),
         api.listRolls(id),
       ]);
+      if (!mounted.current) return;
       setCampaign(campaignResult);
       setCharacters(characterResult.characters);
       setRolls(rollResult.rolls);
+
+      await Promise.all([
+        putCampaign(campaignResult),
+        ...characterResult.characters.map((entry) => putCharacter(entry)),
+        ...rollResult.rolls.map((entry) => putRoll(entry)),
+      ]);
     } catch (caught) {
-      fail(caught);
+      // A network failure with a cached copy is not an error worth shouting about; without one,
+      // say plainly that the campaign has never been stored on this device.
+      if (caught instanceof ApiError) fail(caught);
+      else if (mounted.current) setUnavailableOffline(true);
     } finally {
-      setLoading(false);
+      if (mounted.current) setLoading(false);
     }
   }, [id, fail]);
 
@@ -101,20 +157,136 @@ export default function CampaignPage() {
     }
   }
 
+  /**
+   * Applies the edit locally first. Online it is confirmed by the server; offline (or on a dropped
+   * connection) the change is queued with the revision it was based on, so the server can refuse it
+   * later rather than let it silently overwrite someone else's edit.
+   */
   async function patchCharacter(patch: Parameters<typeof api.updateCharacter>[2]) {
     if (!character) return;
+
+    const optimistic: Character = {
+      ...character,
+      ...patch,
+      ...(patch.stats ? { stats: { ...character.stats, ...patch.stats } } : {}),
+    };
+    setCharacters((current) =>
+      current.map((item) => (item.id === character.id ? optimistic : item)),
+    );
+    await putCharacter(optimistic);
+
     try {
-      const updated = await api.updateCharacter(id, character.id, patch);
+      const updated = await api.updateCharacter(id, character.id, {
+        ...patch,
+        baseRevision: character.revision,
+      });
       setCharacters((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      await putCharacter(updated);
     } catch (caught) {
-      fail(caught);
+      if (caught instanceof ApiError) {
+        fail(caught);
+        // The server said no: put the confirmed sheet back.
+        await load();
+        return;
+      }
+      await enqueue({
+        kind: 'update-character',
+        campaignId: id,
+        label: `${character.name}: ${Object.keys(patch)
+          .filter((key) => key !== 'baseRevision')
+          .join(', ')}`,
+        payload: {
+          characterId: character.id,
+          patch: { ...patch, baseRevision: character.revision },
+        },
+      });
     }
+  }
+
+  /** Unbiased dN from the platform CSPRNG, for rolls made without a connection. */
+  function rollDie(sides: number): number {
+    const buffer = new Uint32Array(1);
+    const limit = Math.floor(0xffffffff / sides) * sides;
+    let value = 0;
+    do {
+      crypto.getRandomValues(buffer);
+      value = buffer[0] ?? 0;
+    } while (value >= limit);
+    return (value % sides) + 1;
+  }
+
+  /** Rolls locally, stores the result as pending, and queues it for the server to verify. */
+  async function rollOffline() {
+    if (!character) return;
+    const localId = crypto.randomUUID();
+    const actionDie = rollDie(6);
+    const challenge: [number, number] = [rollDie(10), rollDie(10)];
+
+    const resolved = resolveActionDice({
+      base: character.stats[stat] + adds,
+      momentum: character.momentum,
+      debilities: character.debilities,
+      burn,
+      actionDie,
+      challenge,
+    });
+
+    const queued: Roll = {
+      id: localId,
+      campaignId: id,
+      characterId: character.id,
+      moveId: null,
+      stat,
+      adds,
+      actionDie: resolved.actionDie,
+      challenge: resolved.challenge,
+      actionScore: resolved.actionScore,
+      outcome: resolved.outcome,
+      match: resolved.match,
+      burned: resolved.burned,
+      source: 'client',
+      momentumBefore: resolved.momentumBefore,
+      momentumAfter: resolved.momentumAfter,
+      createdAt: new Date().toISOString(),
+    };
+
+    setRolls((current) => [queued, ...current].slice(0, 20));
+    setLastRoll(queued);
+    await putRoll(queued, true);
+
+    await enqueue({
+      kind: 'roll',
+      campaignId: id,
+      label: `Roll ${stat}`,
+      payload: {
+        characterId: character.id,
+        stat,
+        adds,
+        burnMomentum: burn,
+        dice: { actionDie, challenge },
+        localRollId: localId,
+      },
+    });
+
+    if (resolved.burned) {
+      const next = { ...character, momentum: resolved.momentumAfter };
+      setCharacters([next]);
+      await putCharacter(next);
+    }
+    setBurn(false);
   }
 
   async function doRoll() {
     if (!character) return;
     setRolling(true);
     setError(null);
+
+    if (!navigator.onLine) {
+      await rollOffline();
+      setRolling(false);
+      return;
+    }
+
     try {
       const result = await api.roll(id, {
         characterId: character.id,
@@ -131,7 +303,12 @@ export default function CampaignPage() {
         setCharacters(refreshed.characters);
       }
     } catch (caught) {
-      fail(caught);
+      if (caught instanceof ApiError) {
+        fail(caught);
+      } else {
+        // The connection dropped mid-roll: keep playing, and let the outbox catch up.
+        await rollOffline();
+      }
     } finally {
       setRolling(false);
     }
@@ -164,11 +341,21 @@ export default function CampaignPage() {
     return (
       <div className="space-y-3">
         <p role="alert" className="alert">
-          {error ?? 'Campaign not found.'}
+          {error ??
+            (unavailableOffline
+              ? 'This campaign is not stored on this device yet. Connect once to load it.'
+              : 'Campaign not found.')}
         </p>
-        <Link to="/" className="text-sm underline underline-offset-2">
-          Back to campaigns
-        </Link>
+        <div className="flex items-center gap-3">
+          {unavailableOffline ? (
+            <Button variant="secondary" onClick={() => void load()}>
+              Try again
+            </Button>
+          ) : null}
+          <Link to="/" className="text-sm underline underline-offset-2">
+            Back to campaigns
+          </Link>
+        </div>
       </div>
     );
   }
@@ -196,6 +383,8 @@ export default function CampaignPage() {
           </Button>
         </div>
       </header>
+
+      <SyncBar onFlushed={() => void load()} />
 
       {error ? (
         <p className="alert" role="alert">
