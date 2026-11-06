@@ -89,7 +89,9 @@ codes (`bad_request`, `unauthorized`, `not_found`, …). Clients parse codes, ne
   release only claims an architecture after CI or a real run proves it. CI builds `amd64`;
   release notes will record per-release evidence.
 - Put a reverse proxy (Caddy, Traefik, nginx) in front for TLS. The web container serves the SPA
-  and proxies `/api`, so one hostname is enough.
+  and proxies `/api`, so one hostname is enough. The API and database ports are published on
+  **loopback only**; anything that needs them off-host should go through the proxy, not by
+  rebinding them to `0.0.0.0`.
 - Secrets come from `.env` / the environment. There are no default credentials anywhere; account
   bootstrap arrives in Phase 2.
 

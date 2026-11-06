@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { probeApi, type ConnectionState } from './lib/api';
 
 const NEXT_UP = [
@@ -89,19 +89,31 @@ function StatusCard({ state, onRetry }: { state: ConnectionState; onRetry: () =>
 
 export default function App() {
   const [state, setState] = useState<ConnectionState>({ kind: 'checking' });
+  const controllerRef = useRef<AbortController | null>(null);
 
+  /**
+   * Retrying aborts the previous probe. Without that, a slow first request can resolve after
+   * a newer one and overwrite fresher state — the UI would show a stale verdict.
+   */
   const check = useCallback(() => {
+    controllerRef.current?.abort();
     const controller = new AbortController();
+    controllerRef.current = controller;
+
     setState({ kind: 'checking' });
     probeApi(controller.signal)
-      .then(setState)
+      .then((next) => {
+        if (!controller.signal.aborted) setState(next);
+      })
       .catch(() => {
         /* aborted: a newer probe owns the state */
       });
-    return () => controller.abort();
   }, []);
 
-  useEffect(() => check(), [check]);
+  useEffect(() => {
+    check();
+    return () => controllerRef.current?.abort();
+  }, [check]);
 
   return (
     <div className="min-h-dvh">
