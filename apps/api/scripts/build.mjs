@@ -24,3 +24,8 @@ await rm('dist', { recursive: true, force: true });
 
 await build({ ...shared, entryPoints: ['src/server.ts'], outfile: 'dist/server.cjs' });
 await build({ ...shared, entryPoints: ['src/migrate.ts'], outfile: 'dist/migrate.cjs' });
+await build({
+  ...shared,
+  entryPoints: ['src/cli/bootstrap-operator.ts'],
+  outfile: 'dist/cli/bootstrap-operator.cjs',
+});

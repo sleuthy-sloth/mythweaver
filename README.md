@@ -3,10 +3,10 @@
 Self-hosted, multi-user, offline-first platform for solo tabletop role-playing. First ruleset:
 Ironsworn. No third-party accounts, no mandatory AI, and your campaign data stays on your server.
 
-**Status: Phase 1 — runnable foundation.** What exists today is the skeleton, not the game: a
-Fastify API with real health/readiness probes, a Drizzle migration against PostgreSQL, a React
-shell that reports the API's state, Docker Compose, and CI. Campaigns, characters, moves and dice
-arrive in later phases; see [PLAN.md](./PLAN.md).
+**Status: Phase 2 — accounts and campaigns (API).** The stack runs end to end: health/readiness
+probes, accounts with Argon2id passwords and server-side sessions, private campaigns with
+owner-checked CRUD, Docker Compose and CI. There is still no game: characters, moves and dice
+arrive in Phase 3, and the web shell has no sign-in UI yet. See [PLAN.md](./PLAN.md).
 
 ## Requirements
 
@@ -58,6 +58,8 @@ needed. To point the web app at a different API, set `VITE_API_BASE_URL`.
 | `pnpm lint` / `pnpm format` | ESLint / Prettier                                     |
 | `pnpm db:generate`          | Generate a migration from `apps/api/src/db/schema.ts` |
 | `pnpm db:migrate`           | Apply pending migrations to `DATABASE_URL`            |
+| `pnpm test:integration`     | API tests against a real PostgreSQL (needs the db up) |
+| `pnpm admin:bootstrap`      | Create the first operator account — see below         |
 
 ## Layout
 
@@ -79,8 +81,43 @@ validate with. Served as JSON rather than through Swagger UI: the UI plugin load
 to `__dirname`, which a single-file bundle cannot provide, and copying vendor assets into the image
 was not worth it for Phase 1.
 
+Identity and campaigns:
+
+| Method                     | Path                    | Notes                                                      |
+| -------------------------- | ----------------------- | ---------------------------------------------------------- |
+| `POST`                     | `/api/v1/auth/register` | 403 when registration is closed                            |
+| `POST`                     | `/api/v1/auth/login`    | sets `mw_session` (HttpOnly) and `mw_csrf`                 |
+| `POST`                     | `/api/v1/auth/logout`   | revokes the session, always clears cookies                 |
+| `GET`                      | `/api/v1/me`            | the signed-in account                                      |
+| `GET`                      | `/api/v1/auth/csrf`     | reads the CSRF cookie for clients without JS cookie access |
+| `GET` / `POST`             | `/api/v1/campaigns`     | list / create                                              |
+| `GET` / `PATCH` / `DELETE` | `/api/v1/campaigns/:id` | read / rename, archive / soft delete                       |
+
+Mutations need `x-csrf-token` matching the `mw_csrf` cookie. A campaign the caller cannot see
+answers `404`, not `403`.
+
 Errors use one envelope: `{ "error": { "code", "message", "requestId", "details?" } }` with stable
 codes (`bad_request`, `unauthorized`, `not_found`, …). Clients parse codes, never messages.
+
+## Accounts
+
+Registration is **closed by default**. Create the first (operator) account from a shell:
+
+```bash
+pnpm admin:bootstrap --email you@example.com --name "Your Name"
+# prompted for a password, hidden, 12+ characters
+```
+
+There are no default credentials, and the operator role cannot be granted through the API. To
+open public sign-ups, set `REGISTRATION_OPEN=true`; the API logs a warning at every boot while it
+is on. Full details — sessions, CSRF, throttling, campaign authorization — are in
+[docs/identity.md](./docs/identity.md).
+
+### Trying it over plain HTTP on a LAN
+
+In production the session cookie is `Secure`, so a browser on `http://192.168.x.x` will accept the
+login response but drop the cookie. Either put TLS in front (the intended setup) or set
+`COOKIE_SECURE=false` in `.env` for a throwaway local trial.
 
 ## Deployment notes
 
@@ -92,8 +129,8 @@ codes (`bad_request`, `unauthorized`, `not_found`, …). Clients parse codes, ne
   and proxies `/api`, so one hostname is enough. The API and database ports are published on
   **loopback only**; anything that needs them off-host should go through the proxy, not by
   rebinding them to `0.0.0.0`.
-- Secrets come from `.env` / the environment. There are no default credentials anywhere; account
-  bootstrap arrives in Phase 2.
+- Secrets come from `.env` / the environment. There are no default credentials anywhere; the
+  first account is created with `pnpm admin:bootstrap`.
 
 ## License
 

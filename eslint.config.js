@@ -30,4 +30,9 @@ export default tseslint.config(
       globals: { ...globals.node },
     },
   },
+  {
+    // The bootstrap CLI is a terminal program; stdout is its interface.
+    files: ['apps/api/src/cli/**/*.ts'],
+    rules: { 'no-console': 'off' },
+  },
 );

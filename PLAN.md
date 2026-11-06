@@ -193,3 +193,45 @@ Known gaps after this phase (intentional, not oversights):
   Phase 3 with the Dexie outbox.
 - The error envelope is unit tested through `inject`; no rate limiting or load testing yet.
 - Images are `linux/arm64` only on this host; `amd64` is claimed for CI only after it runs.
+
+## Phase 2 delivery record (2026-11-06)
+
+Delivered: registration policy (`REGISTRATION_OPEN`, closed by default), Argon2id passwords,
+server-side sessions with hashed tokens, login/logout/`/me`, CSRF double-submit protection,
+per-IP throttling on login and registration, operator bootstrap CLI, campaign CRUD with
+ownership enforced in the service layer, soft delete with name confirmation, migration `0001`.
+
+Evidence (commands run on this host, results observed):
+
+| Command                                    | Result                                                                                                                                                                                                                             |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm typecheck` / `lint` / `format:check` | clean                                                                                                                                                                                                                              |
+| `pnpm test` (unit)                         | 11/11                                                                                                                                                                                                                              |
+| `pnpm test:integration` (real PostgreSQL)  | 20/20 — auth, isolation, CSRF, sessions, rate limits, campaign lifecycle                                                                                                                                                           |
+| `pnpm db:migrate` on the dev database      | `0001` applied; 4 tables present (`users`, `sessions`, `campaigns`, `campaign_members`)                                                                                                                                            |
+| `pnpm admin:bootstrap --generate-password` | operator created, password printed once, count reported                                                                                                                                                                            |
+| `docker compose build api && up -d`        | image rebuilt, migrate re-ran as a no-op, all services healthy                                                                                                                                                                     |
+| HTTP smoke test through nginx              | register → 403 (closed); login → 200 + `HttpOnly; Secure; SameSite=Lax` cookies; `/me` → 200; campaign create without CSRF → 403, with CSRF → 201; delete with wrong name → 400, exact name → 204; logout → 204; `/me` after → 401 |
+
+Deviations and findings worth recording:
+
+1. **Argon2 runs on `hash-wasm`, not `@node-rs/argon2`.** The native package ships per-platform
+   `.node` files; esbuild cannot bundle them, and the container build failed with "No loader is
+   configured for .node files". WASM keeps the single-file bundle and the multi-arch story. The
+   PHC output is standard: a hash created by the native binding verifies under hash-wasm
+   (checked against the operator row before switching).
+2. **Rate limits are per-route `config.rateLimit`, not top-level route options.** The first
+   attempt silently did nothing; the integration test caught it (third login returned 401, not 429).
+3. **CSRF is skipped for unauthenticated requests.** With no session there is nothing to ride, and
+   the honest answer is 401 from the route rather than 403 from the CSRF check. Unauthenticated
+   campaign creation now returns 401.
+4. **Validation errors needed a second mapping.** Fastify converts Zod compiler failures into its
+   own `error.validation` shape, so the `ZodError` branch never fired and field-level `details`
+   were empty. Both shapes now map to the same envelope; the "short password" test pins it.
+5. **`Secure` cookies in production will reject a plain-HTTP browser on a LAN IP**, even though
+   `curl` on loopback accepts them. Documented in README: use TLS, or `COOKIE_SECURE=false` for a
+   throwaway trial.
+
+Known gaps after Phase 2: no auth UI, no password change/reset/verification/2FA, no account
+deletion or export, no sharing endpoints exposed (schema supports them), rate limits are
+in-process only, and the SPA still has no campaign views.

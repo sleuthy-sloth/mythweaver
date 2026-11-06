@@ -67,7 +67,10 @@ function StatusCard({ state, onRetry }: { state: ConnectionState; onRetry: () =>
                 ? `, database round trip ${state.database.latencyMs} ms.`
                 : '.'}
             </p>
-            <p>This is the Phase 1 slice: health endpoints, one migration, one test per layer.</p>
+            <p>
+              Accounts, sessions and private campaign storage are live. The game itself — moves,
+              dice, oracles — lands in Phase 3.
+            </p>
           </>
         )}
         {state.kind === 'offline' && (
@@ -148,8 +151,8 @@ export default function App() {
             ))}
           </ul>
           <p className="mt-4 text-xs text-muted">
-            Nothing here is a placeholder for working game rules. Moves, dice and oracles land in
-            Phase 3 with deterministic tests.
+            These are interfaces still to come, not screens that exist. The API behind them is real,
+            with tests; the UI for accounts and campaigns is next.
           </p>
         </section>
       </main>

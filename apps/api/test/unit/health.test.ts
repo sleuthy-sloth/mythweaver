@@ -1,18 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
 import { HealthLiveSchema, HealthReadySchema } from '@mythweaver/contracts';
-import { buildApp } from '../src/app';
-import { loadConfig } from '../src/config';
+import { buildApp } from '../../src/app';
+import { loadConfig } from '../../src/config';
+import { createDatabase } from '../../src/db/client';
 
+/**
+ * The URL is never dialled in these tests: postgres.js connects lazily, so constructing a
+ * handle is enough to satisfy routes that would use it.
+ */
 function testConfig() {
   return loadConfig({
     NODE_ENV: 'test',
-    DATABASE_URL: 'postgres://mythweaver:secret@127.0.0.1:55432/mythweaver',
+    DATABASE_URL: 'postgres://mythweaver:unused@127.0.0.1:1/mythweaver',
   });
+}
+
+function testDb() {
+  return createDatabase('postgres://mythweaver:unused@127.0.0.1:1/mythweaver').db;
 }
 
 describe('GET /api/v1/health/live', () => {
   it('reports the process alive and matches the contract', async () => {
-    const app = await buildApp({ config: testConfig() });
+    const app = await buildApp({ config: testConfig(), db: testDb() });
     const response = await app.inject({ method: 'GET', url: '/api/v1/health/live' });
 
     expect(response.statusCode).toBe(200);
@@ -26,7 +35,7 @@ describe('GET /api/v1/health/live', () => {
 
   it('does not touch the database', async () => {
     const checkDatabase = vi.fn(async () => 1);
-    const app = await buildApp({ config: testConfig(), checkDatabase });
+    const app = await buildApp({ config: testConfig(), db: testDb(), checkDatabase });
 
     await app.inject({ method: 'GET', url: '/api/v1/health/live' });
 
@@ -39,6 +48,7 @@ describe('GET /api/v1/health/ready', () => {
   it('returns 200 with latency when the database answers', async () => {
     const app = await buildApp({
       config: testConfig(),
+      db: testDb(),
       checkDatabase: async () => 3.5,
     });
 
@@ -55,6 +65,7 @@ describe('GET /api/v1/health/ready', () => {
   it('returns 503 when the database is unreachable', async () => {
     const app = await buildApp({
       config: testConfig(),
+      db: testDb(),
       checkDatabase: async () => {
         throw new Error('connect ECONNREFUSED 127.0.0.1:55432');
       },
@@ -68,13 +79,13 @@ describe('GET /api/v1/health/ready', () => {
     expect(body.checks.database.status).toBe('fail');
     // The connection string must never appear in a response body.
     expect(response.body).not.toContain('ECONNREFUSED');
-    expect(response.body).not.toContain('secret');
+    expect(response.body).not.toContain('unused');
 
     await app.close();
   });
 
   it('returns 503 when no database check was wired up', async () => {
-    const app = await buildApp({ config: testConfig() });
+    const app = await buildApp({ config: testConfig(), db: testDb() });
     const response = await app.inject({ method: 'GET', url: '/api/v1/health/ready' });
 
     expect(response.statusCode).toBe(503);
@@ -84,13 +95,24 @@ describe('GET /api/v1/health/ready', () => {
 
 describe('error handling', () => {
   it('returns a stable error envelope for unknown routes', async () => {
-    const app = await buildApp({ config: testConfig() });
+    const app = await buildApp({ config: testConfig(), db: testDb() });
     const response = await app.inject({ method: 'GET', url: '/api/v1/nope' });
 
     expect(response.statusCode).toBe(404);
     const body = response.json() as { error: { code: string; requestId: string } };
     expect(body.error.code).toBe('not_found');
     expect(body.error.requestId).toBeTruthy();
+
+    await app.close();
+  });
+
+  it('refuses an unauthenticated campaign request', async () => {
+    const app = await buildApp({ config: testConfig(), db: testDb() });
+    const response = await app.inject({ method: 'GET', url: '/api/v1/campaigns' });
+
+    expect(response.statusCode).toBe(401);
+    const body = response.json() as { error: { code: string } };
+    expect(body.error.code).toBe('unauthorized');
 
     await app.close();
   });
@@ -107,5 +129,22 @@ describe('config', () => {
       CORS_ORIGINS: 'https://a.example, https://b.example',
     });
     expect(config.corsOrigins).toEqual(['https://a.example', 'https://b.example']);
+  });
+
+  it('closes registration by default and only opens it on request', () => {
+    expect(loadConfig({ DATABASE_URL: 'postgres://localhost/db' }).registrationOpen).toBe(false);
+    expect(
+      loadConfig({ DATABASE_URL: 'postgres://localhost/db', REGISTRATION_OPEN: 'true' })
+        .registrationOpen,
+    ).toBe(true);
+  });
+
+  it('marks cookies Secure in production and not in development', () => {
+    expect(
+      loadConfig({ DATABASE_URL: 'postgres://localhost/db', NODE_ENV: 'production' }).cookieSecure,
+    ).toBe(true);
+    expect(
+      loadConfig({ DATABASE_URL: 'postgres://localhost/db', NODE_ENV: 'development' }).cookieSecure,
+    ).toBe(false);
   });
 });

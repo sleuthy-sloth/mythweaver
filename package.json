@@ -22,7 +22,9 @@
     "db:generate": "pnpm --filter @mythweaver/api db:generate",
     "db:migrate": "pnpm --filter @mythweaver/api db:migrate",
     "stack:up": "docker compose up --build",
-    "stack:down": "docker compose down"
+    "stack:down": "docker compose down",
+    "admin:bootstrap": "pnpm --filter @mythweaver/api admin:bootstrap",
+    "test:integration": "pnpm --filter @mythweaver/api test:integration"
   },
   "devDependencies": {
     "eslint": "^9.17.0",

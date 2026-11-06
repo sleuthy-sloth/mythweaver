@@ -1,10 +1,19 @@
 import { sql } from 'drizzle-orm';
-import { check, index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  check,
+  index,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 /**
- * Accounts. Phase 1 creates the table and the migration path; authentication arrives in
- * Phase 2, which is why password_hash is already here (adding it later would mean a
- * migration over live data).
+ * Accounts. Registration policy is an operator setting, not a schema concern; `role` is the
+ * only privileged distinction and is never writable through the API.
  *
  * Email uniqueness is case-insensitive by index: `Ada@example.com` and `ada@example.com`
  * must not become two accounts.
@@ -27,5 +36,95 @@ export const users = pgTable(
   }),
 );
 
+/**
+ * Server-side sessions. The cookie carries a random token; only its SHA-256 is stored, so a
+ * database leak does not hand over live sessions. Revocation is a timestamp, which keeps an
+ * audit trail instead of silently deleting the row.
+ */
+export const sessions = pgTable(
+  'sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (table) => ({
+    tokenHashUnique: uniqueIndex('sessions_token_hash_unique').on(table.tokenHash),
+    userIdx: index('sessions_user_id_idx').on(table.userId),
+    expiresIdx: index('sessions_expires_at_idx').on(table.expiresAt),
+  }),
+);
+
+/**
+ * Campaigns are private by default: a row is visible only to its owner and to explicit
+ * `campaign_members`. `revision` increments on every accepted mutation and is the anchor for
+ * Phase 3 sync conflict detection. Deletion is soft (`deleted_at`) because sync needs tombstones.
+ */
+export const campaigns = pgTable(
+  'campaigns',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    rulesetId: text('ruleset_id').notNull().default('ironsworn'),
+    rulesetVersion: text('ruleset_version'),
+    revision: integer('revision').notNull().default(1),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    lastPlayedAt: timestamp('last_played_at', { withTimezone: true }),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    nameCheck: check('campaigns_name_check', sql`char_length(${table.name}) between 1 and 120`),
+    rulesetCheck: check(
+      'campaigns_ruleset_check',
+      sql`char_length(${table.rulesetId}) between 1 and 64`,
+    ),
+    ownerIdx: index('campaigns_owner_id_idx').on(table.ownerId),
+    // Every list query filters on owner + soft delete; the index matches that access path.
+    ownerVisibleIdx: index('campaigns_owner_visible_idx').on(table.ownerId, table.deletedAt),
+  }),
+);
+
+/**
+ * Explicit, revocable sharing. The owner also gets a row here (`role = 'owner'`) so every
+ * authorization decision reads from one table and a shared campaign cannot be orphaned.
+ */
+export const campaignMembers = pgTable(
+  'campaign_members',
+  {
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: text('role').notNull().default('viewer'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.campaignId, table.userId] }),
+    roleCheck: check(
+      'campaign_members_role_check',
+      sql`${table.role} in ('owner', 'editor', 'viewer')`,
+    ),
+    userIdx: index('campaign_members_user_id_idx').on(table.userId),
+  }),
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type Session = typeof sessions.$inferSelect;
+export type Campaign = typeof campaigns.$inferSelect;
+export type NewCampaign = typeof campaigns.$inferInsert;
+export type CampaignMember = typeof campaignMembers.$inferSelect;

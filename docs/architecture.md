@@ -46,7 +46,7 @@ Out of scope until separately approved: real-time multiplayer, public social fea
 hosted service, a marketplace, autonomous AI control of campaign state, multiple rulesets in v1,
 image generation, and any dependency on Solesworn code or services.
 
-## Security baseline (Phase 1)
+## Security baseline (Phase 2)
 
 - Environment parsed at boot; a missing `DATABASE_URL` stops the process.
 - Body limit 1 MiB; helmet headers; no CORS unless explicitly configured.
@@ -55,7 +55,11 @@ image generation, and any dependency on Solesworn code or services.
 - Secrets only via environment; nothing is baked into an image.
 
 Phase 2 adds: Argon2id hashing, server-side sessions in HttpOnly/SameSite cookies, CSRF tokens,
-login throttling, and per-campaign authorization enforced in the service layer.
+login throttling, and per-campaign authorization enforced in the service layer. Registration is
+closed by default; the first operator is created from a shell with no default password.
+
+Authorization is enforced by the query, not by middleware: `getCampaignForUser` joins
+`campaign_members`, so every read is scoped whether or not a route remembered a `preHandler`.
 
 ## Sync model (Phase 3, designed now so schema choices hold)
 
@@ -66,10 +70,11 @@ login throttling, and per-campaign authorization enforced in the service layer.
   values and ask the player. No last-write-wins on game state.
 - Deletions propagate as tombstones; the server is the arbiter of canonical revisions.
 
-## Known gaps in this phase
+## Known gaps after Phase 2
 
-- No authentication or authorization (nothing sensitive is served).
-- No service worker yet; the manifest makes the app installable but offline boot arrives with the
-  Dexie work in Phase 3, where storage limits and the outbox need a real design.
-- No integration test against a live PostgreSQL in the repo yet; CI applies migrations against a
-  service container, which proves the migration but not API/database behaviour.
+- The SPA has no sign-in or campaign UI; the shell still reports API state only.
+- No password change, reset, email verification, 2FA or account deletion.
+- Sharing endpoints are not exposed, though `campaign_members` already models owner/editor/viewer.
+- No service worker yet; offline boot arrives with the Dexie work in Phase 3.
+- Integration tests need a running PostgreSQL; `pnpm test` (unit) does not.
+- Rate limiting is per-process memory. A multi-replica deployment needs a shared store.

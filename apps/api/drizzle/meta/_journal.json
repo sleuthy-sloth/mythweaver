@@ -8,6 +8,13 @@
       "when": 1793943876238,
       "tag": "0000_sour_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793946616211,
+      "tag": "0001_colorful_the_liberteens",
+      "breakpoints": true
     }
   ]
 }

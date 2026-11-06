@@ -1,9 +1,12 @@
+import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import { API_PREFIX, CONTRACT_VERSION, type ApiErrorCode } from '@mythweaver/contracts';
 import Fastify, { type FastifyInstance } from 'fastify';
 import {
+  hasZodFastifySchemaValidationErrors,
   jsonSchemaTransform,
   serializerCompiler,
   validatorCompiler,
@@ -11,11 +14,18 @@ import {
 } from 'fastify-type-provider-zod';
 import { ZodError } from 'zod';
 import type { AppConfig } from './config';
+import type { Database } from './db/client';
+import { AppError } from './lib/errors';
+import { authRoutes } from './modules/auth/routes';
+import { campaignRoutes } from './modules/campaigns/routes';
+import { registerSecurityHooks } from './plugins/security';
 import { healthRoutes } from './routes/health';
 
 export type AppDeps = {
   config: AppConfig;
-  /** Injected so tests never need a live database. */
+  /** Postgres handle. Routes resolve it lazily, so a health-only test never opens a socket. */
+  db: Database;
+  /** Injected so tests can simulate an unreachable database without stopping Postgres. */
   checkDatabase?: () => Promise<number>;
 };
 
@@ -28,7 +38,7 @@ const STATUS_TO_CODE: Record<number, ApiErrorCode> = {
   429: 'rate_limited',
 };
 
-export async function buildApp({ config, checkDatabase }: AppDeps): Promise<FastifyInstance> {
+export async function buildApp({ config, db, checkDatabase }: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({
     logger: config.isTest
       ? false
@@ -60,9 +70,18 @@ export async function buildApp({ config, checkDatabase }: AppDeps): Promise<Fast
     crossOriginResourcePolicy: { policy: 'same-site' },
   });
 
+  // Cookies are unsigned on purpose: the value is a random token verified against the
+  // sessions table, so a signature would add a rotating secret without adding safety.
+  await app.register(cookie);
+
   // No CORS plugin at all when nothing is configured: same-origin only is the safe default.
   if (config.corsOrigins.length > 0) {
     await app.register(cors, { origin: config.corsOrigins, credentials: true });
+  }
+
+  if (config.rateLimitEnabled) {
+    // Registered without a global limit; each sensitive route opts in with its own budget.
+    await app.register(rateLimit, { global: false });
   }
 
   await app.register(swagger, {
@@ -73,7 +92,11 @@ export async function buildApp({ config, checkDatabase }: AppDeps): Promise<Fast
         description: 'Contract for the Mythweaver self-hosted solo RPG platform.',
         version: CONTRACT_VERSION,
       },
-      tags: [{ name: 'health', description: 'Liveness and readiness probes' }],
+      tags: [
+        { name: 'health', description: 'Liveness and readiness probes' },
+        { name: 'auth', description: 'Accounts and sessions' },
+        { name: 'campaigns', description: 'Campaigns owned by the caller' },
+      ],
     },
     transform: jsonSchemaTransform,
   });
@@ -86,8 +109,25 @@ export async function buildApp({ config, checkDatabase }: AppDeps): Promise<Fast
    */
   app.get(`${API_PREFIX}/openapi.json`, { schema: { hide: true } }, async () => app.swagger());
 
+  registerSecurityHooks(app, db, config);
+
   app.setErrorHandler((error: unknown, request, reply) => {
     const requestId = request.id;
+
+    /**
+     * Fastify converts compiler failures into its own validation error, so the ZodError branch
+     * below never sees request-schema issues. Both shapes are mapped to the same payload.
+     */
+    if (hasZodFastifySchemaValidationErrors(error)) {
+      const details: Record<string, string[]> = {};
+      for (const issue of error.validation) {
+        const key = issue.instancePath.replace(/^\//, '').replace(/\//g, '.') || '_';
+        (details[key] ??= []).push(issue.message);
+      }
+      return reply.status(400).send({
+        error: { code: 'bad_request', message: 'Request validation failed', requestId, details },
+      });
+    }
 
     if (error instanceof ZodError) {
       const details: Record<string, string[]> = {};
@@ -97,6 +137,18 @@ export async function buildApp({ config, checkDatabase }: AppDeps): Promise<Fast
       }
       return reply.status(400).send({
         error: { code: 'bad_request', message: 'Request validation failed', requestId, details },
+      });
+    }
+
+    // Deliberate failures carry their own code, status and safe message.
+    if (error instanceof AppError) {
+      return reply.status(error.statusCode).send({
+        error: {
+          code: error.code,
+          message: error.message,
+          requestId,
+          ...(error.details ? { details: error.details } : {}),
+        },
       });
     }
 
@@ -134,6 +186,9 @@ export async function buildApp({ config, checkDatabase }: AppDeps): Promise<Fast
     version: config.version,
     ...(checkDatabase ? { checkDatabase } : {}),
   });
+
+  await app.register(authRoutes, { prefix: API_PREFIX, db, config });
+  await app.register(campaignRoutes, { prefix: API_PREFIX, db });
 
   return app;
 }
