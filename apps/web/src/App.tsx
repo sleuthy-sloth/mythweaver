@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Emblem } from './components/ui';
 import { useAuth } from './lib/auth';
 import CampaignPage from './pages/CampaignPage';
 import CampaignsPage from './pages/CampaignsPage';
@@ -29,14 +30,15 @@ function Header() {
 
   return (
     <header className="border-b border-border">
-      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-5 py-3">
-        <Link to="/" className="font-display text-lg tracking-tight">
-          Mythweaver
+      <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-5 py-2.5">
+        <Link to="/" className="flex items-center gap-2 text-ink">
+          <Emblem size={20} />
+          <span className="display text-lg leading-none">Mythweaver</span>
         </Link>
 
         {status === 'authenticated' ? (
-          <div className="flex items-center gap-3 text-sm">
-            <span className="hidden text-muted sm:inline">{user.displayName}</span>
+          <div className="flex items-center gap-2">
+            <span className="eyebrow hidden sm:inline">{user.displayName}</span>
             <button
               type="button"
               className="btn btn-ghost"
@@ -55,7 +57,7 @@ function Header() {
 
 export default function App() {
   return (
-    <div className="min-h-dvh">
+    <div className="flex min-h-dvh flex-col">
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-accent focus:px-4 focus:py-2 focus:text-canvas"
@@ -65,7 +67,7 @@ export default function App() {
 
       <Header />
 
-      <main id="main" className="mx-auto w-full max-w-5xl px-5 py-6 pb-16">
+      <main id="main" className="mx-auto w-full max-w-5xl flex-1 px-5 py-6 pb-16">
         <Routes>
           <Route path="/signin" element={<SignInPage />} />
           <Route
@@ -88,8 +90,8 @@ export default function App() {
         </Routes>
       </main>
 
-      <footer className="mx-auto w-full max-w-5xl px-5 pb-8 text-xs text-muted">
-        <p>
+      <footer className="mx-auto w-full max-w-5xl px-5 pb-8 text-[11px] leading-relaxed text-muted">
+        <p className="border-t border-border pt-3">
           Mythweaver is independent software. Ironsworn is by Shawn Tomkin; its SRD content is used
           under CC BY 4.0 and attributed when it ships.
         </p>

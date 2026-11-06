@@ -304,3 +304,29 @@ Findings:
 Known UI gaps: the roll panel sits below the character sheet on a phone, so the primary action
 needs a scroll; no PWA install prompt or offline mode yet (3c); no world, vows, oracles or journal
 screens; character creation has no stat-assignment step (defaults, then editable).
+
+## UI redesign pass (2026-11-06)
+
+The Phase 3b client worked but looked generic: boxy cards, system serif, no visual identity. This
+pass applied the "field journal" direction that had been written up for a design tool
+(`docs/design-brief.md`), directly in code.
+
+What changed: self-hosted Spectral for display and numerals (OFL, Latin + Latin-ext), a paper grain
+layer, hairline rules and a double rule under panel headings, five-column stat figures with tabular
+figures, pip meters for Health/Spirit/Supply, a dedicated momentum gauge with a zero mark and the
+reset value written under the track, dice rendered as physical objects with beaten dice struck
+through (not just tinted), outcome shown as a word, and a ledger-style roll history.
+
+Two defects found by measurement rather than by eye, both worth remembering:
+
+1. **Tailwind purged the component classes.** Anything inside `@layer components` is tree-shaken
+   unless the exact class name appears as a literal string in the scanned source. `btn-${variant}`
+   and `badge-${outcome}` are composed at runtime, so `.btn-primary`, `.badge-*` and `.outcome-*`
+   were deleted from the bundle while still on the elements — the primary button rendered as plain
+   text and the numeric audit caught it at 1.2:1 contrast. Component CSS now lives outside the layer.
+2. **Stat columns were sized by content**, so "Shadow" was wider than "Wits". `flex: 1 1 0` fixed it.
+
+Measured after the fix: primary button 6.12:1, body/eyebrow text 5.57:1, headings 16.09:1, no
+horizontal overflow at 390 px, 44 px steppers/chips, 17-segment gauge, three dice, equal stat
+columns. The visual judgement (does it feel crafted?) still needs a human eye; screenshots were
+reviewed by the user, not by the agent.

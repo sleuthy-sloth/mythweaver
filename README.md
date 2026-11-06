@@ -67,6 +67,7 @@ needed. To point the web app at a different API, set `VITE_API_BASE_URL`.
 ```text
 apps/api/          Fastify + Drizzle. Routes, auth, campaigns, characters, rolls.
 apps/web/          React + Vite + Tailwind. Sign-in, campaigns, sheet, rolls; PWA manifest.
+                   Self-hosted Spectral (OFL) for display type, system sans for UI.
 packages/contracts Zod schemas shared by server and browser.
 packages/rules-core      System-agnostic rules types (Rng, Outcome, tracks, moves).
 packages/rules-ironsworn Ironsworn mechanics: dice, momentum, progress, action rolls.

@@ -1,3 +1,49 @@
+@font-face {
+  font-family: 'Spectral';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/spectral-500-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Spectral';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/spectral-500-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Spectral';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/spectral-600-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Spectral';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/spectral-600-latin-ext.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,29 +51,39 @@
 @layer base {
   :root {
     color-scheme: light;
-    --mw-canvas: #f4ede1;
-    --mw-surface: #fffaf2;
-    --mw-ink: #221c14;
-    --mw-muted: #6b5f4d;
-    --mw-accent: #8a5a1f;
-    --mw-border: #d9cbb4;
-    --mw-danger: #9a2f2f;
-    --mw-success: #2f6b45;
+    --mw-canvas: #f2e9db;
+    --mw-canvas-deep: #e9ddca;
+    --mw-surface: #fbf5ea;
+    --mw-ink: #1e1911;
+    --mw-ink-soft: #443a2c;
+    --mw-muted: #6d6150;
+    --mw-border: #d8c8ae;
+    --mw-border-strong: #b7a483;
+    --mw-accent: #8a4f1d;
+    --mw-success: #2d6a44;
     --mw-warning: #7a5314;
+    --mw-danger: #962c2c;
+    --mw-shadow: 0 1px 2px rgb(30 25 17 / 6%), 0 18px 34px -30px rgb(30 25 17 / 55%);
+    --mw-grain: 0.035;
   }
 
   @media (prefers-color-scheme: dark) {
     :root {
       color-scheme: dark;
-      --mw-canvas: #14110e;
-      --mw-surface: #1d1915;
-      --mw-ink: #f0e7d8;
-      --mw-muted: #b6a892;
-      --mw-accent: #e0b877;
-      --mw-border: #38312a;
-      --mw-danger: #e58a8a;
-      --mw-success: #86c9a2;
-      --mw-warning: #e0b877;
+      --mw-canvas: #12100d;
+      --mw-canvas-deep: #0c0a08;
+      --mw-surface: #1c1814;
+      --mw-ink: #efe6d6;
+      --mw-ink-soft: #d3c6b2;
+      --mw-muted: #a99a83;
+      --mw-border: #3a322a;
+      --mw-border-strong: #55493c;
+      --mw-accent: #d9a45f;
+      --mw-success: #8ac9a3;
+      --mw-warning: #dfb877;
+      --mw-danger: #e08c85;
+      --mw-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 18px 34px -30px rgb(0 0 0 / 80%);
+      --mw-grain: 0.05;
     }
   }
 
@@ -36,13 +92,55 @@
   }
 
   body {
-    @apply bg-canvas font-body text-ink antialiased;
+    background-color: var(--mw-canvas);
+    color: var(--mw-ink);
+    font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      'Segoe UI',
+      Roboto,
+      'Helvetica Neue',
+      sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
     min-height: 100dvh;
+  }
+
+  /* Paper grain: one inline turbulence tile, multiplied under everything. Offline, cheap,
+     and faint enough that it never fights the text. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: var(--mw-grain);
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+  }
+
+  body > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: 'Spectral', 'Iowan Old Style', Palatino, Georgia, serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
 
   :focus-visible {
     outline: 2px solid var(--mw-accent);
-    outline-offset: 2px;
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--mw-accent) 22%, transparent);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -56,115 +154,384 @@
   }
 }
 
-@layer components {
-  .panel,
-  .card {
-    @apply rounded-xl border border-border bg-surface p-5 shadow-sm;
-  }
+/*
+ * Component classes are written as plain CSS, deliberately NOT inside `@layer components`.
+ * Tailwind tree-shakes anything in a layer that it cannot find as a literal string in the
+ * content scan — and these names are composed at runtime (`btn-${variant}`,
+ * `badge-${outcome}`), so `btn-primary`, `badge-strong_hit` and friends were being deleted
+ * from the bundle while still appearing on elements. Plain CSS is never purged.
+ */
 
-  .btn {
-    @apply inline-flex min-h-11 items-center justify-center rounded-lg border px-4 py-2
-      text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
-  }
+/* ---- surfaces ------------------------------------------------------- */
 
-  .btn-primary {
-    @apply border-accent bg-accent text-canvas hover:opacity-90;
-  }
+.panel {
+  background: var(--mw-surface);
+  border: 1px solid var(--mw-border);
+  border-radius: 3px;
+  box-shadow: var(--mw-shadow);
+  padding: 1.15rem;
+}
 
-  .btn-secondary {
-    @apply border-border text-ink hover:border-accent hover:text-accent;
+@media (min-width: 640px) {
+  .panel {
+    padding: 1.4rem;
   }
+}
 
-  /* Tailwind cannot apply an opacity modifier to a var()-based colour, so tinted
-     surfaces are written as color-mix instead of `bg-danger/10`. */
-  .btn-danger {
-    @apply border-danger text-danger;
-  }
+/* Double rule under a heading: the printed-sheet cue that carries most of the character. */
+.panel-head {
+  border-bottom: 1px solid var(--mw-border);
+  padding-bottom: 0.7rem;
+  margin-bottom: 0.95rem;
+  position: relative;
+}
 
-  .btn-danger:hover {
-    background: color-mix(in srgb, var(--mw-danger) 12%, transparent);
-  }
+.panel-head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 1px;
+  background: var(--mw-border);
+}
 
-  .alert {
-    @apply rounded-lg border px-3 py-2 text-sm;
-    border-color: var(--mw-danger);
-    color: var(--mw-danger);
-    background: color-mix(in srgb, var(--mw-danger) 12%, transparent);
-  }
+.eyebrow {
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--mw-muted);
+  font-weight: 500;
+}
 
-  .inset {
-    @apply border border-border;
-    background: color-mix(in srgb, var(--mw-canvas) 60%, transparent);
-  }
+.hairline {
+  border-top: 1px solid var(--mw-border);
+}
 
-  .chip,
-  .chip-selected {
-    @apply min-h-11 rounded-lg border px-3 text-sm;
-  }
+/* ---- type ----------------------------------------------------------- */
 
-  .chip {
-    @apply border-border text-muted hover:text-ink;
-  }
+.display {
+  font-family: 'Spectral', 'Iowan Old Style', Palatino, Georgia, serif;
+  font-weight: 600;
+}
 
-  .chip-selected {
-    @apply border-accent text-accent;
-    background: color-mix(in srgb, var(--mw-accent) 12%, transparent);
-  }
+.numeral {
+  font-family: 'Spectral', 'Iowan Old Style', Palatino, Georgia, serif;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-weight: 500;
+}
 
-  .btn-ghost {
-    @apply border-transparent text-muted hover:text-ink;
-  }
+.mono-figures {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
 
-  .input {
-    @apply min-h-11 w-full rounded-lg border border-border bg-canvas px-3 py-2 text-base
-      text-ink placeholder:text-muted;
-  }
+/* ---- controls ------------------------------------------------------- */
 
-  .code {
-    @apply rounded bg-canvas px-1.5 py-0.5 font-mono text-xs;
-  }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0 1rem;
+  border-radius: 3px;
+  border: 1px solid var(--mw-border-strong);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--mw-ink);
+  background: transparent;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
 
-  .badge {
-    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium;
-  }
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
-  /* Colour is decoration; the badge always carries the outcome as a word. */
-  .badge-strong_hit {
-    color: var(--mw-success);
-    border-color: var(--mw-success);
-    background: color-mix(in srgb, var(--mw-success) 10%, transparent);
-  }
+.btn-primary {
+  background: var(--mw-accent);
+  border-color: var(--mw-accent);
+  color: #fdf7ec;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%);
+}
 
-  .badge-weak_hit {
-    color: var(--mw-warning);
-    border-color: var(--mw-warning);
-    background: color-mix(in srgb, var(--mw-warning) 10%, transparent);
-  }
+.btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mw-accent) 88%, black);
+}
 
-  .badge-miss {
-    color: var(--mw-danger);
-    border-color: var(--mw-danger);
-    background: color-mix(in srgb, var(--mw-danger) 10%, transparent);
-  }
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--mw-accent);
+  color: var(--mw-accent);
+  background: color-mix(in srgb, var(--mw-accent) 6%, transparent);
+}
 
-  .die {
-    @apply flex size-11 items-center justify-center rounded-lg border border-border
-      bg-canvas font-mono text-lg;
-  }
+.btn-danger {
+  border-color: color-mix(in srgb, var(--mw-danger) 55%, var(--mw-border));
+  color: var(--mw-danger);
+}
 
-  .die-beaten {
-    border-color: var(--mw-success);
-    color: var(--mw-success);
-  }
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mw-danger) 10%, transparent);
+}
 
-  .die-action {
-    border-color: var(--mw-accent);
-    color: var(--mw-accent);
-  }
+.btn-ghost {
+  border-color: transparent;
+  color: var(--mw-muted);
+  padding: 0 0.6rem;
+}
 
-  /* 44px minimum: below this, a thumb misses the control on a phone. */
-  .stepper {
-    @apply flex size-11 items-center justify-center rounded-md border border-border text-lg
-      leading-none text-muted hover:border-accent hover:text-accent disabled:opacity-40;
-  }
+.btn-ghost:hover:not(:disabled) {
+  color: var(--mw-ink);
+}
+
+.input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--mw-border-strong);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--mw-canvas) 55%, var(--mw-surface));
+  color: var(--mw-ink);
+  font-size: 16px; /* prevents iOS zoom-on-focus */
+}
+
+.input::placeholder {
+  color: color-mix(in srgb, var(--mw-muted) 70%, transparent);
+}
+
+.input:focus {
+  border-color: var(--mw-accent);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mw-accent) 18%, transparent);
+}
+
+.alert {
+  border: 1px solid color-mix(in srgb, var(--mw-danger) 45%, var(--mw-border));
+  border-left-width: 3px;
+  background: color-mix(in srgb, var(--mw-danger) 8%, var(--mw-surface));
+  color: var(--mw-danger);
+  border-radius: 2px;
+  padding: 0.55rem 0.7rem;
+  font-size: 13.5px;
+}
+
+/* ---- sheet parts ---------------------------------------------------- */
+
+.stat-figure {
+  /* Equal columns: labels differ in width, and ragged stat widths look like a mistake. */
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.5rem 0.25rem 0.6rem;
+  text-align: center;
+  border-right: 1px solid var(--mw-border);
+}
+
+.stat-figure:last-child {
+  border-right: 0;
+}
+
+.stat-figure .value {
+  font-family: 'Spectral', 'Iowan Old Style', Palatino, Georgia, serif;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.stat-figure .name {
+  margin-top: 2px;
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--mw-muted);
+}
+
+.pip {
+  flex: 1 1 0;
+  height: 8px;
+  border: 1px solid var(--mw-border-strong);
+  border-radius: 1px;
+  background: transparent;
+}
+
+.pip-on {
+  background: var(--mw-accent);
+  border-color: var(--mw-accent);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--mw-border-strong);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--mw-muted);
+  font-size: 13px;
+}
+
+.chip:hover {
+  color: var(--mw-ink);
+}
+
+.chip-on {
+  color: var(--mw-accent);
+  border-color: var(--mw-accent);
+  background: color-mix(in srgb, var(--mw-accent) 8%, transparent);
+}
+
+.chip-danger.chip-on {
+  color: var(--mw-danger);
+  border-color: var(--mw-danger);
+  background: color-mix(in srgb, var(--mw-danger) 8%, transparent);
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--mw-border-strong);
+  border-radius: 3px;
+  color: var(--mw-ink-soft);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.stepper:hover:not(:disabled) {
+  border-color: var(--mw-accent);
+  color: var(--mw-accent);
+}
+
+.stepper:disabled {
+  opacity: 0.35;
+}
+
+/* ---- dice ----------------------------------------------------------- */
+
+.die {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--mw-border-strong);
+  border-radius: 4px;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--mw-surface) 92%, white),
+    var(--mw-surface)
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 55%),
+    inset 0 -2px 3px rgb(30 25 17 / 6%),
+    0 1px 1px rgb(30 25 17 / 8%);
+  font-family: 'Spectral', serif;
+  font-variant-numeric: tabular-nums;
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.die-action {
+  border-color: var(--mw-accent);
+  color: var(--mw-accent);
+}
+
+/* Beaten dice are struck through as well as tinted: colour is never the only signal. */
+.die-beaten {
+  color: var(--mw-success);
+  border-color: color-mix(in srgb, var(--mw-success) 55%, var(--mw-border));
+}
+
+.die-beaten::after {
+  content: '';
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  top: 50%;
+  border-top: 1px solid color-mix(in srgb, var(--mw-success) 60%, transparent);
+  transform: rotate(-18deg);
+}
+
+/* ---- outcomes ------------------------------------------------------- */
+
+.outcome {
+  font-family: 'Spectral', serif;
+  font-weight: 600;
+  font-size: 25px;
+  line-height: 1.1;
+}
+
+.outcome-strong_hit {
+  color: var(--mw-success);
+}
+
+.outcome-weak_hit {
+  color: var(--mw-warning);
+}
+
+.outcome-miss {
+  color: var(--mw-danger);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.badge-strong_hit {
+  color: var(--mw-success);
+}
+
+.badge-weak_hit {
+  color: var(--mw-warning);
+}
+
+.badge-miss {
+  color: var(--mw-danger);
+}
+
+/* ---- lists ---------------------------------------------------------- */
+
+.ledger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 62px;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--mw-border);
+  border-radius: 3px;
+  background: var(--mw-surface);
+  box-shadow: var(--mw-shadow);
+  transition:
+    border-color 120ms ease,
+    transform 120ms ease;
+}
+
+.ledger-row:hover {
+  border-color: var(--mw-accent);
+  transform: translateY(-1px);
+}
+
+.code {
+  border: 1px solid var(--mw-border);
+  border-radius: 2px;
+  padding: 0 4px;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--mw-canvas) 60%, var(--mw-surface));
 }

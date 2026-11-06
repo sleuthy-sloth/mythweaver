@@ -12,10 +12,12 @@ import {
   Button,
   DiceRow,
   Field,
-  OutcomeBadge,
+  MomentumGauge,
+  OutcomeMark,
   Panel,
-  StatCell,
-  Stepper,
+  PipMeter,
+  RollLine,
+  StatFigure,
   TextInput,
 } from '../components/ui';
 import { describeError, useAuth } from '../lib/auth';
@@ -138,8 +140,7 @@ export default function CampaignPage() {
   async function toggleArchive() {
     if (!campaign) return;
     try {
-      const updated = await api.updateCampaign(id, { archived: !campaign.archivedAt });
-      setCampaign(updated);
+      setCampaign(await api.updateCampaign(id, { archived: !campaign.archivedAt }));
     } catch (caught) {
       fail(caught);
     }
@@ -162,7 +163,7 @@ export default function CampaignPage() {
   if (!campaign) {
     return (
       <div className="space-y-3">
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="alert">
           {error ?? 'Campaign not found.'}
         </p>
         <Link to="/" className="text-sm underline underline-offset-2">
@@ -179,20 +180,22 @@ export default function CampaignPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Link to="/" className="text-xs text-muted underline underline-offset-2 hover:text-ink">
-            ← Campaigns
-          </Link>
-          <h1 className="mt-1 font-display text-3xl leading-tight">{campaign.name}</h1>
-          <p className="mt-1 text-xs text-muted">
-            {campaign.rulesetId} · {campaign.archivedAt ? 'archived' : 'active'}
-          </p>
+      <header>
+        <Link to="/" className="eyebrow hover:text-ink">
+          ← Campaigns
+        </Link>
+        <div className="mt-1.5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="eyebrow">
+              {campaign.rulesetId} · {campaign.archivedAt ? 'archived' : 'active'}
+            </p>
+            <h1 className="mt-0.5 text-3xl leading-tight">{campaign.name}</h1>
+          </div>
+          <Button variant="secondary" onClick={toggleArchive}>
+            {campaign.archivedAt ? 'Unarchive' : 'Archive'}
+          </Button>
         </div>
-        <Button variant="secondary" onClick={toggleArchive}>
-          {campaign.archivedAt ? 'Unarchive' : 'Archive'}
-        </Button>
-      </div>
+      </header>
 
       {error ? (
         <p className="alert" role="alert">
@@ -201,7 +204,10 @@ export default function CampaignPage() {
       ) : null}
 
       {!character ? (
-        <Panel title="Who are you?" subtitle="Create a character sheet to start playing.">
+        <Panel eyebrow="Character" title="Who are you?">
+          <p className="mb-4 text-sm text-muted">
+            A sheet holds your stats, your meters, and the momentum you carry between scenes.
+          </p>
           <form onSubmit={createCharacter} className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
               <Field label="Character name" htmlFor="character-name">
@@ -220,60 +226,72 @@ export default function CampaignPage() {
           </form>
         </Panel>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-          <Panel title={character.name} subtitle={`Momentum reset +${reset} · max +${momentumCap}`}>
-            <div className="grid grid-cols-5 gap-1.5">
+        <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+          <section className="panel">
+            <div className="panel-head">
+              <p className="eyebrow">Character</p>
+              <div className="mt-0.5 flex items-baseline justify-between gap-3">
+                <h2 className="text-2xl leading-tight">{character.name}</h2>
+                <span className="eyebrow">rev {character.revision}</span>
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                Momentum reset +{reset} · max +{momentumCap}
+              </p>
+            </div>
+
+            <div className="flex border-y border-border">
               {STATS.map((key) => (
-                <StatCell key={key} label={STAT_LABEL[key]} value={character.stats[key]} />
+                <StatFigure key={key} name={STAT_LABEL[key]} value={character.stats[key]} />
               ))}
             </div>
 
-            <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-              <Stepper
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <PipMeter
                 label="Health"
                 value={character.health}
                 min={0}
                 max={5}
                 onChange={(health) => void patchCharacter({ health })}
               />
-              <Stepper
+              <PipMeter
                 label="Spirit"
                 value={character.spirit}
                 min={0}
                 max={5}
                 onChange={(spirit) => void patchCharacter({ spirit })}
               />
-              <Stepper
+              <PipMeter
                 label="Supply"
                 value={character.supply}
                 min={0}
                 max={5}
                 onChange={(supply) => void patchCharacter({ supply })}
               />
-              <Stepper
-                label="Momentum"
+            </div>
+
+            <div className="mt-4 border-t border-border pt-4">
+              <MomentumGauge
                 value={character.momentum}
-                min={MIN_MOMENTUM}
+                reset={reset}
                 max={momentumCap}
+                min={MIN_MOMENTUM}
                 onChange={(momentum) => void patchCharacter({ momentum })}
               />
             </div>
 
-            <fieldset className="mt-4">
-              <legend className="text-xs uppercase tracking-wide text-muted">Debilities</legend>
-              <div className="mt-1.5 flex flex-wrap gap-2">
+            <div className="mt-4 border-t border-border pt-3">
+              <p className="eyebrow">Debilities</p>
+              <div className="mt-2 flex flex-wrap gap-2">
                 {DEBILITIES.map((key) => {
                   const marked = debilities.includes(key);
                   return (
                     <label
                       key={key}
-                      className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm ${
-                        marked ? 'border-danger text-danger' : 'border-border text-muted'
-                      }`}
+                      className={`chip chip-danger cursor-pointer ${marked ? 'chip-on' : ''}`}
                     >
                       <input
                         type="checkbox"
-                        className="size-4 accent-current"
+                        className="size-4"
                         checked={marked}
                         onChange={(event) => {
                           const next = event.target.checked
@@ -287,14 +305,17 @@ export default function CampaignPage() {
                   );
                 })}
               </div>
-            </fieldset>
+            </div>
 
-            <p className="mt-3 text-xs text-muted">
-              Revision {character.revision} · XP {character.xp}
-            </p>
-          </Panel>
+            <p className="mt-3 text-[11px] text-muted">XP {character.xp}</p>
+          </section>
 
-          <Panel title="Roll" subtitle="Pick the stat the move uses. The server rolls.">
+          <section className="panel">
+            <div className="panel-head">
+              <p className="eyebrow">Move</p>
+              <h2 className="mt-0.5 text-xl leading-tight">Roll</h2>
+            </div>
+
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Stat">
               {STATS.map((key) => (
                 <button
@@ -302,14 +323,14 @@ export default function CampaignPage() {
                   type="button"
                   aria-pressed={stat === key}
                   onClick={() => setStat(key)}
-                  className={stat === key ? 'chip-selected' : 'chip'}
+                  className={`chip flex-1 justify-center ${stat === key ? 'chip-on' : ''}`}
                 >
                   {STAT_LABEL[key]}
                 </button>
               ))}
             </div>
 
-            <div className="mt-3 flex items-end gap-3">
+            <div className="mt-4 flex items-end gap-3">
               <div className="w-24">
                 <Field label="Adds" htmlFor="adds">
                   <TextInput
@@ -324,8 +345,8 @@ export default function CampaignPage() {
                 </Field>
               </div>
               <label
-                className={`mb-1 flex min-h-11 flex-1 items-center gap-2 rounded-lg border px-3 text-sm ${
-                  canBurn ? 'border-border' : 'border-border text-muted'
+                className={`chip mb-0.5 flex-1 ${burn ? 'chip-on' : ''} ${
+                  canBurn ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
                 }`}
               >
                 <input
@@ -335,24 +356,39 @@ export default function CampaignPage() {
                   disabled={!canBurn}
                   onChange={(event) => setBurn(event.target.checked)}
                 />
-                Burn momentum{' '}
-                {canBurn ? `(${character.momentum} → +${reset})` : '(needs positive momentum)'}
+                <span className="text-[13px] leading-tight">
+                  Burn momentum
+                  <span className="block text-[11px] opacity-80">
+                    {canBurn ? `${character.momentum} → +${reset}` : 'needs positive momentum'}
+                  </span>
+                </span>
               </label>
             </div>
 
-            <div className="mt-3">
-              <Button variant="primary" onClick={() => void doRoll()} busy={rolling}>
-                Roll {STAT_LABEL[stat]}
-              </Button>
-            </div>
+            <Button
+              variant="primary"
+              onClick={() => void doRoll()}
+              busy={rolling}
+              className="mt-4 w-full"
+            >
+              Roll {STAT_LABEL[stat]}
+            </Button>
 
-            <div className="mt-4" role="status" aria-live="polite" aria-label="Latest roll">
+            <div
+              className="mt-4 border-t border-border pt-4"
+              role="status"
+              aria-live="polite"
+              aria-label="Latest roll"
+            >
               {lastRoll ? (
-                <div className="inset p-3">
-                  <div className="flex items-center justify-between">
-                    <OutcomeBadge outcome={lastRoll.outcome} />
-                    <span className="text-xs text-muted">
-                      {STAT_LABEL[lastRoll.stat]} + {lastRoll.adds}
+                <div>
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <OutcomeMark outcome={lastRoll.outcome} />
+                    <span className="eyebrow">
+                      {STAT_LABEL[lastRoll.stat]}
+                      {lastRoll.adds !== 0
+                        ? ` ${lastRoll.adds > 0 ? '+' : ''}${lastRoll.adds}`
+                        : ''}
                       {lastRoll.match ? ' · match' : ''}
                     </span>
                   </div>
@@ -366,42 +402,34 @@ export default function CampaignPage() {
                   </p>
                 </div>
               ) : (
-                <p className="text-sm text-muted">No roll yet this session.</p>
+                <p className="text-sm text-muted">
+                  Pick a stat and roll. The dice come from the server and are kept.
+                </p>
               )}
             </div>
-          </Panel>
+          </section>
         </div>
       )}
 
-      <Panel title="Roll history" subtitle="Newest first. Rolls are permanent.">
+      <Panel eyebrow="Record" title="Roll history">
         {rolls.length === 0 ? (
-          <p className="text-sm text-muted">Nothing rolled yet.</p>
+          <p className="text-sm text-muted">
+            Nothing rolled yet. The ledger starts with your first move.
+          </p>
         ) : (
-          <ul className="divide-y divide-border">
+          <ul>
             {rolls.map((roll) => (
-              <li key={roll.id} className="flex items-center justify-between gap-3 py-2.5">
-                <span className="flex items-center gap-2 text-sm">
-                  <OutcomeBadge outcome={roll.outcome} />
-                  <span className="text-muted">
-                    {STAT_LABEL[roll.stat]}
-                    {roll.adds !== 0 ? ` ${roll.adds > 0 ? '+' : ''}${roll.adds}` : ''}
-                  </span>
-                </span>
-                <span className="font-mono text-xs text-muted">
-                  {roll.actionDie} vs {roll.challenge[0]}/{roll.challenge[1]} = {roll.actionScore}
-                  {roll.match ? ' · match' : ''}
-                </span>
-              </li>
+              <RollLine key={roll.id} roll={roll} />
             ))}
           </ul>
         )}
       </Panel>
 
-      <details className="rounded-xl border border-border bg-surface p-5">
-        <summary className="cursor-pointer text-sm font-medium text-muted">Danger zone</summary>
+      <details className="panel">
+        <summary className="eyebrow cursor-pointer">Danger zone</summary>
         <div className="mt-3 space-y-3">
           <p className="text-sm text-muted">
-            Deleting hides the campaign and its rolls immediately. Type the name to confirm.
+            Deleting hides this campaign and its rolls immediately. Type the name to confirm.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <TextInput

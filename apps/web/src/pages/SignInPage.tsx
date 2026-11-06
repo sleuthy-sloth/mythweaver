@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Button, Field, TextInput } from '../components/ui';
+import { Button, Emblem, Field, TextInput } from '../components/ui';
 import { describeError, useAuth } from '../lib/auth';
 
 type Mode = 'signin' | 'register';
@@ -47,20 +47,27 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-md px-5 py-10">
-      <p className="text-xs uppercase tracking-[0.2em] text-muted">Self-hosted solo RPG</p>
-      <h1 className="mt-1 font-display text-4xl leading-tight">Mythweaver</h1>
+    <div className="mx-auto w-full max-w-sm py-8">
+      <div className="flex items-center gap-2.5">
+        <Emblem size={26} />
+        <h1 className="text-2xl leading-none">Mythweaver</h1>
+      </div>
+      <p className="mt-2 text-sm text-muted">
+        A quiet table for solo play. Your campaigns stay on your server.
+      </p>
 
       <div className="panel mt-6">
-        <div className="mb-4 flex gap-1 rounded-lg border border-border p-1" role="tablist">
+        <div className="flex border-b border-border" role="tablist" aria-label="Account">
           {(['signin', 'register'] as const).map((value) => (
             <button
               key={value}
               type="button"
               role="tab"
               aria-selected={mode === value}
-              className={`min-h-11 flex-1 rounded-md px-3 text-sm ${
-                mode === value ? 'bg-accent text-canvas' : 'text-muted hover:text-ink'
+              className={`-mb-px min-h-11 flex-1 border-b-2 px-3 text-sm transition-colors ${
+                mode === value
+                  ? 'border-accent font-medium text-ink'
+                  : 'border-transparent text-muted hover:text-ink'
               }`}
               onClick={() => {
                 setMode(value);
@@ -72,7 +79,7 @@ export default function SignInPage() {
           ))}
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-4" noValidate>
+        <form onSubmit={onSubmit} className="mt-5 space-y-4" noValidate>
           <Field label="Email" htmlFor="email">
             <TextInput
               id="email"
@@ -117,18 +124,14 @@ export default function SignInPage() {
             </p>
           ) : null}
 
-          <Button type="submit" variant="primary" busy={busy}>
+          <Button type="submit" variant="primary" busy={busy} className="w-full">
             {mode === 'signin' ? 'Sign in' : 'Create account'}
           </Button>
         </form>
-
-        <p className="mt-4 text-xs text-muted">
-          No third-party account, no AI required. Your campaigns live on this server.
-        </p>
       </div>
 
-      <p className="mt-6 text-center text-xs text-muted">
-        <Link to="/" className="underline underline-offset-2 hover:text-ink">
+      <p className="mt-5 text-center text-xs text-muted">
+        <Link to="/" className="hover:text-ink">
           Back to the table
         </Link>
       </p>

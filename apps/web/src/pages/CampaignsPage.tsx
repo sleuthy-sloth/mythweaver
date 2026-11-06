@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import type { Campaign } from '@mythweaver/contracts';
 import { Button, Field, Panel, TextInput } from '../components/ui';
-import { useAuth, describeError } from '../lib/auth';
+import { describeError, useAuth } from '../lib/auth';
 import { ApiError, api } from '../lib/http';
 
 export default function CampaignsPage() {
@@ -46,20 +46,19 @@ export default function CampaignsPage() {
     }
   }
 
+  const list = campaigns ?? [];
+
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-xs uppercase tracking-[0.2em] text-muted">Your table</p>
-        <h1 className="mt-1 font-display text-3xl leading-tight">Campaigns</h1>
+    <div className="space-y-5">
+      <header>
+        <p className="eyebrow">Your table</p>
+        <h1 className="mt-0.5 text-3xl leading-tight">Campaigns</h1>
         <p className="mt-1 text-sm text-muted">
           Welcome back, {user?.displayName}. Everything here is private to your account.
         </p>
-      </div>
+      </header>
 
-      <Panel
-        title="Start a campaign"
-        subtitle="One world, one character, as many sessions as you like."
-      >
+      <Panel eyebrow="New" title="Start a campaign">
         <form onSubmit={createCampaign} className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1">
             <Field label="Campaign name" htmlFor="campaign-name">
@@ -85,33 +84,42 @@ export default function CampaignsPage() {
       ) : null}
 
       <section aria-labelledby="list-heading" className="space-y-3">
-        <h2 id="list-heading" className="font-display text-xl">
-          {campaigns === null
-            ? 'Loading…'
-            : campaigns.length === 0
-              ? 'No campaigns yet'
-              : 'Open a campaign'}
-        </h2>
+        <div className="flex items-baseline justify-between">
+          <h2 id="list-heading" className="text-xl">
+            {campaigns === null
+              ? 'Loading…'
+              : list.length === 0
+                ? 'No campaigns yet'
+                : 'Open a campaign'}
+          </h2>
+          {list.length > 0 ? (
+            <span className="eyebrow">
+              {list.length} {list.length === 1 ? 'campaign' : 'campaigns'}
+            </span>
+          ) : null}
+        </div>
 
-        {campaigns !== null && campaigns.length === 0 ? (
-          <p className="text-sm text-muted">
-            Create your first campaign above. A campaign holds your character, rolls and — soon —
-            the vows and world around them.
+        {campaigns !== null && list.length === 0 ? (
+          <p className="max-w-prose text-sm text-muted">
+            Create your first campaign above. A campaign holds your character, the rolls you make,
+            and — soon — the vows and world around them.
           </p>
         ) : null}
 
         <ul className="space-y-2">
-          {(campaigns ?? []).map((campaign) => (
+          {list.map((campaign, index) => (
             <li key={campaign.id}>
-              <Link
-                to={`/campaigns/${campaign.id}`}
-                className="flex min-h-16 items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3 hover:border-accent"
-              >
-                <span>
-                  <span className="font-display text-lg">{campaign.name}</span>
-                  <span className="mt-0.5 block text-xs text-muted">
-                    {campaign.rulesetId} · {campaign.archivedAt ? 'archived' : 'active'} ·{' '}
-                    {campaign.role}
+              <Link to={`/campaigns/${campaign.id}`} className="ledger-row">
+                <span className="flex items-baseline gap-3">
+                  <span className="eyebrow mono-figures w-6 shrink-0">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <span>
+                    <span className="display text-lg leading-tight">{campaign.name}</span>
+                    <span className="mt-0.5 block text-xs text-muted">
+                      {campaign.rulesetId} · {campaign.archivedAt ? 'archived' : 'active'} ·{' '}
+                      {campaign.role}
+                    </span>
                   </span>
                 </span>
                 <span aria-hidden="true" className="text-muted">

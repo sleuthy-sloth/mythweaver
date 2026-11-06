@@ -30,6 +30,15 @@ Required attribution for CC BY 4.0 material, once included:
 CC BY 4.0 forbids implying endorsement and requires indicating changes. If we alter text, say so
 in the manifest entry.
 
+## Bundled assets
+
+| Asset                                                     | Terms                                                     | Location                                         |
+| --------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------ |
+| Spectral (Latin + Latin Extended, weights 500/600, woff2) | SIL Open Font License 1.1, © The Spectral Project Authors | `apps/web/public/fonts/`, licence text alongside |
+
+The font ships inside the image and is served from our own origin. No request goes to Google at
+runtime.
+
 ## What is in the repository today
 
 Nothing from any game. Phase 1 ships no rules text, tables, names from oracle tables, or art. The
