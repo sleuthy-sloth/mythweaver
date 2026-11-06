@@ -5,10 +5,13 @@ export function newOpaqueToken(): string {
   return randomBytes(32).toString('base64url');
 }
 
-/** Session tokens are stored hashed; a database dump must not be a set of usable cookies. */
-export function hashToken(token: string): string {
-  return createHash('sha256').update(token, 'utf8').digest('hex');
+/** SHA-256 hex. Used for session tokens and for hashing idempotent request bodies. */
+export function sha256Hex(value: string): string {
+  return createHash('sha256').update(value, 'utf8').digest('hex');
 }
+
+/** Session tokens are stored hashed; a database dump must not be a set of usable cookies. */
+export const hashToken = sha256Hex;
 
 /** Constant-time comparison for secrets of equal length. */
 export function safeEqual(a: string, b: string): boolean {

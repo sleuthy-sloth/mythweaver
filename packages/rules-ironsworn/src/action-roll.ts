@@ -33,8 +33,28 @@ export type ActionRollResult = DiceResult & {
  *    momentum for a strong hit. Burning is only legal with positive momentum.
  */
 export function rollAction(input: ActionRollInput): ActionRollResult {
-  const actionDie = input.rng.d6();
-  const challenge: [number, number] = [input.rng.d10(), input.rng.d10()];
+  return resolveActionDice({
+    ...input,
+    actionDie: input.rng.d6(),
+    challenge: [input.rng.d10(), input.rng.d10()],
+  });
+}
+
+export type ResolveActionInput = Omit<ActionRollInput, 'rng'> & {
+  actionDie: number;
+  challenge: readonly [number, number];
+};
+
+/**
+ * Same resolution, but with the dice supplied instead of rolled.
+ *
+ * The server uses this for offline play: a client that rolled without a connection sends its
+ * dice, and the server re-derives the outcome from them rather than trusting a claimed result.
+ * It is also what the tests drive, so there is one code path, not a test-only copy.
+ */
+export function resolveActionDice(input: ResolveActionInput): ActionRollResult {
+  const actionDie = input.actionDie;
+  const challenge: [number, number] = [input.challenge[0], input.challenge[1]];
 
   // Negative momentum "matches" the action die on its magnitude: momentum -3 cancels a roll of 3.
   const actionDieCancelled = input.momentum < 0 && Math.abs(input.momentum) === actionDie;

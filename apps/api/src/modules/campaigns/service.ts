@@ -2,7 +2,7 @@ import type { Campaign as CampaignDto, CampaignRole } from '@mythweaver/contract
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client';
 import { campaigns, campaignMembers } from '../../db/schema';
-import { badRequest, campaignNotFound, forbidden } from '../../lib/errors';
+import { badRequest, campaignNotFound, conflictWith, forbidden } from '../../lib/errors';
 
 type CampaignRow = typeof campaigns.$inferSelect;
 
@@ -129,10 +129,21 @@ export async function updateCampaign(
   db: Database,
   userId: string,
   campaignId: string,
-  input: { name?: string; description?: string | null; archived?: boolean },
+  input: {
+    baseRevision?: number;
+    name?: string;
+    description?: string | null;
+    archived?: boolean;
+  },
 ): Promise<CampaignDto> {
-  const { role } = await getCampaignForUser(db, userId, campaignId);
+  const { campaign, role } = await getCampaignForUser(db, userId, campaignId);
   if (role !== 'owner') throw forbidden('Only the campaign owner can change it');
+
+  if (input.baseRevision !== undefined && input.baseRevision !== campaign.revision) {
+    throw conflictWith('This campaign changed since you loaded it', {
+      currentRevision: [String(campaign.revision)],
+    });
+  }
 
   const [updated] = await db
     .update(campaigns)

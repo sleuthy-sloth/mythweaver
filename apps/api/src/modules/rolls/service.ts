@@ -1,6 +1,6 @@
 import { randomInt } from 'node:crypto';
 import type { Roll as RollDto, RollRequest } from '@mythweaver/contracts';
-import { rollAction, type Rng } from '@mythweaver/rules-ironsworn';
+import { resolveActionDice, rollAction, type Rng } from '@mythweaver/rules-ironsworn';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client';
 import { characters, rolls } from '../../db/schema';
@@ -35,6 +35,7 @@ export function toRollDto(row: RollRow): RollDto {
     outcome: row.outcome as RollDto['outcome'],
     match: row.isMatch,
     burned: row.burned,
+    source: row.source === 'client' ? 'client' : 'server',
     momentumBefore: row.momentumBefore,
     momentumAfter: row.momentumAfter,
     createdAt: row.createdAt.toISOString(),
@@ -64,13 +65,29 @@ export async function recordRoll(
   }
 
   const statValue = character[input.stat];
-  const result = rollAction({
-    base: statValue + input.adds,
-    momentum: character.momentum,
-    debilities: character.debilities,
-    burn: input.burnMomentum,
-    rng: cryptoRng(),
-  });
+  const base = statValue + input.adds;
+
+  /**
+   * Offline clients send the dice they rolled. The server re-derives the outcome from those dice
+   * with the same engine — it never accepts a claimed result — and records the source so a stored
+   * roll says where its randomness came from.
+   */
+  const result = input.dice
+    ? resolveActionDice({
+        base,
+        momentum: character.momentum,
+        debilities: character.debilities,
+        burn: input.burnMomentum,
+        actionDie: input.dice.actionDie,
+        challenge: input.dice.challenge,
+      })
+    : rollAction({
+        base,
+        momentum: character.momentum,
+        debilities: character.debilities,
+        burn: input.burnMomentum,
+        rng: cryptoRng(),
+      });
 
   const row = await db.transaction(async (tx) => {
     const [inserted] = await tx
@@ -88,6 +105,7 @@ export async function recordRoll(
         outcome: result.outcome,
         isMatch: result.match,
         burned: result.burned,
+        source: input.dice ? 'client' : 'server',
         momentumBefore: result.momentumBefore,
         momentumAfter: result.momentumAfter,
       })

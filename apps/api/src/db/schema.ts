@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  jsonb,
   index,
   integer,
   pgTable,
@@ -206,6 +207,8 @@ export const rolls = pgTable(
     outcome: text('outcome').notNull(),
     isMatch: boolean('is_match').notNull().default(false),
     burned: boolean('burned').notNull().default(false),
+    /** `server` when the API rolled the dice, `client` when offline dice were submitted. */
+    source: text('source').notNull().default('server'),
     momentumBefore: smallint('momentum_before'),
     momentumAfter: smallint('momentum_after'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -219,6 +222,7 @@ export const rolls = pgTable(
       'rolls_stat_check',
       sql`${table.stat} in ('edge', 'heart', 'iron', 'shadow', 'wits')`,
     ),
+    sourceCheck: check('rolls_source_check', sql`${table.source} in ('server', 'client')`),
     campaignCreatedIdx: index('rolls_campaign_created_idx').on(table.campaignId, table.createdAt),
   }),
 );
@@ -227,3 +231,32 @@ export type Character = typeof characters.$inferSelect;
 export type NewCharacter = typeof characters.$inferInsert;
 export type Roll = typeof rolls.$inferSelect;
 export type NewRoll = typeof rolls.$inferInsert;
+
+/**
+ * Idempotency records for POST retries.
+ *
+ * An offline client replays its outbox after reconnecting, and a flaky network can deliver the same
+ * request twice. The key is supplied by the client; the stored response is returned verbatim on a
+ * repeat, so a retry cannot create a second campaign or a duplicate roll.
+ *
+ * Rows are per user and per key, and the request hash is stored so reusing a key with a different
+ * body is an error rather than a silent wrong answer.
+ */
+export const idempotencyKeys = pgTable(
+  'idempotency_keys',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    requestHash: text('request_hash').notNull(),
+    status: integer('status').notNull(),
+    body: jsonb('body'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    userKeyUnique: uniqueIndex('idempotency_user_key_unique').on(table.userId, table.key),
+    createdIdx: index('idempotency_created_at_idx').on(table.createdAt),
+  }),
+);

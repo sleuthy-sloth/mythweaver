@@ -19,7 +19,13 @@ export {
   momentumReset,
   type Debility,
 } from './momentum';
-export { rollAction, type ActionRollInput, type ActionRollResult } from './action-roll';
+export {
+  resolveActionDice,
+  rollAction,
+  type ActionRollInput,
+  type ActionRollResult,
+  type ResolveActionInput,
+} from './action-roll';
 export {
   BOXES_PER_TRACK,
   MAX_TICKS,

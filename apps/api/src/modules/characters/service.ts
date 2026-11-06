@@ -7,7 +7,7 @@ import type {
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { Database } from '../../db/client';
 import { characters } from '../../db/schema';
-import { forbidden, notFound } from '../../lib/errors';
+import { conflictWith, forbidden, notFound } from '../../lib/errors';
 import { getCampaignForUser } from '../campaigns/service';
 
 type CharacterRow = typeof characters.$inferSelect;
@@ -115,12 +115,23 @@ export async function updateCharacter(
   const { role } = await getCampaignForUser(db, userId, campaignId);
   assertCanWrite(role);
 
-  const existing = await db
-    .select({ id: characters.id })
+  const [existing] = await db
+    .select({ id: characters.id, revision: characters.revision })
     .from(characters)
     .where(and(eq(characters.id, characterId), eq(characters.campaignId, campaignId)))
     .limit(1);
-  if (existing.length === 0) throw notFound('Character not found');
+  if (!existing) throw notFound('Character not found');
+
+  /**
+   * Optimistic concurrency. An offline client edits from a revision it saw; if the sheet moved on,
+   * the update is refused rather than silently overwriting the other change. The client keeps both
+   * values and asks the player, per the sync rules.
+   */
+  if (input.baseRevision !== undefined && input.baseRevision !== existing.revision) {
+    throw conflictWith('This character changed since you loaded it', {
+      currentRevision: [String(existing.revision)],
+    });
+  }
 
   const [row] = await db
     .update(characters)

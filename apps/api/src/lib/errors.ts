@@ -36,6 +36,10 @@ export const notFound = (message = 'Not found') => new AppError('not_found', 404
 
 export const conflict = (message: string) => new AppError('conflict', 409, message);
 
+/** Conflict with machine-readable context, e.g. the revision the server actually holds. */
+export const conflictWith = (message: string, details: Record<string, string[]>) =>
+  new AppError('conflict', 409, message, details);
+
 /**
  * A campaign the caller cannot see is reported as missing, not forbidden: a 403 would confirm
  * that the id exists in someone else's account.

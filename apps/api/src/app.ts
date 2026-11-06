@@ -20,6 +20,7 @@ import { authRoutes } from './modules/auth/routes';
 import { campaignRoutes } from './modules/campaigns/routes';
 import { characterRoutes } from './modules/characters/routes';
 import { rollRoutes } from './modules/rolls/routes';
+import { registerIdempotency } from './plugins/idempotency';
 import { registerSecurityHooks } from './plugins/security';
 import { healthRoutes } from './routes/health';
 
@@ -114,6 +115,7 @@ export async function buildApp({ config, db, checkDatabase }: AppDeps): Promise<
   app.get(`${API_PREFIX}/openapi.json`, { schema: { hide: true } }, async () => app.swagger());
 
   registerSecurityHooks(app, db, config);
+  registerIdempotency(app, db);
 
   app.setErrorHandler((error: unknown, request, reply) => {
     const requestId = request.id;

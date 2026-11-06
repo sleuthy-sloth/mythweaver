@@ -8,5 +8,10 @@ declare module 'fastify' {
   interface FastifyRequest {
     user: AuthUser | null;
     sessionId: string | null;
+    /** Set by the idempotency hook when a POST carries a usable key. */
+    idempotencyKey?: string;
+    idempotencyHash?: string;
+    /** True when the response is a replay, so onSend must not store it again. */
+    idempotencyHit?: boolean;
   }
 }

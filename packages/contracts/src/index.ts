@@ -159,6 +159,8 @@ export type CreateCampaignRequest = z.infer<typeof CreateCampaignRequestSchema>;
  */
 export const UpdateCampaignRequestSchema = z
   .object({
+    /** Revision the client edited from; a mismatch is a 409 instead of a silent overwrite. */
+    baseRevision: z.number().int().min(1).optional(),
     name: z.string().trim().min(1).max(120).optional(),
     description: z.string().trim().max(2000).nullable().optional(),
     archived: z.boolean().optional(),
@@ -233,6 +235,8 @@ export type CreateCharacterRequest = z.infer<typeof CreateCharacterRequestSchema
 
 export const UpdateCharacterRequestSchema = z
   .object({
+    /** Revision the client edited from; a mismatch is a 409 instead of a silent overwrite. */
+    baseRevision: z.number().int().min(1).optional(),
     name: z.string().trim().min(1).max(120).optional(),
     stats: StatsSchema.optional(),
     health: z.number().int().min(0).max(5).optional(),
@@ -260,6 +264,16 @@ export const RollRequestSchema = z.object({
   burnMomentum: z.boolean().default(false),
   /** Optional move id for the journal; moves themselves are data, not server logic. */
   moveId: z.string().trim().max(64).optional(),
+  /**
+   * Dice rolled offline by the client. The server re-derives the outcome from them with the same
+   * engine rather than trusting a stated result. Omitted means "roll on the server".
+   */
+  dice: z
+    .object({
+      actionDie: z.number().int().min(1).max(6),
+      challenge: z.tuple([z.number().int().min(1).max(10), z.number().int().min(1).max(10)]),
+    })
+    .optional(),
 });
 export type RollRequest = z.infer<typeof RollRequestSchema>;
 
@@ -277,6 +291,8 @@ export const RollSchema = z.object({
   outcome: OutcomeSchema,
   match: z.boolean(),
   burned: z.boolean(),
+  /** `server` when the API rolled, `client` when offline dice were submitted. */
+  source: z.enum(['server', 'client']),
   momentumBefore: z.number().int().nullable(),
   momentumAfter: z.number().int().nullable(),
   createdAt: z.string().datetime(),
