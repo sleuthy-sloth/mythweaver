@@ -1,0 +1,85 @@
+name: mythweaver
+
+# Lives at the repository root so `docker compose up --build` works with no flags and picks up
+# ./.env automatically. Dockerfiles and nginx config stay in infra/.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mythweaver}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-mythweaver}
+    volumes:
+      - mythweaver-db:/var/lib/postgresql/data
+    ports:
+      # Host 55432 avoids the machine-wide Postgres on 5432. Remove this mapping on a
+      # server where only the API needs the database.
+      - '${POSTGRES_HOST_PORT:-55432}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  migrate:
+    build:
+      context: .
+      dockerfile: infra/api.Dockerfile
+    command: ['node', 'dist/migrate.cjs']
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${POSTGRES_USER:-mythweaver}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:-mythweaver}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/api.Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_PORT: '8080'
+      API_HOST: 0.0.0.0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      DATABASE_URL: postgres://${POSTGRES_USER:-mythweaver}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:-mythweaver}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+    ports:
+      - '${API_HOST_PORT:-8080}:8080'
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/api/v1/health/live']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/web.Dockerfile
+    restart: unless-stopped
+    ports:
+      - '${WEB_HOST_PORT:-8088}:8080'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/healthz']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+
+volumes:
+  mythweaver-db:

@@ -1,0 +1,19 @@
+{
+  "name": "Mythweaver",
+  "short_name": "Mythweaver",
+  "description": "A self-hosted, offline-first table for solo role-playing.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f4ede1",
+  "theme_color": "#f4ede1",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

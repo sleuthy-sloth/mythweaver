@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Format, lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  migrations:
+    name: Migrations apply to an empty PostgreSQL
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: mythweaver
+          POSTGRES_PASSWORD: ci-password
+          POSTGRES_DB: mythweaver
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mythweaver"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgres://mythweaver:ci-password@127.0.0.1:5432/mythweaver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:migrate
+      - name: Migrations are idempotent (second run is a no-op)
+        run: pnpm db:migrate
+      - name: users table exists with expected constraints
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT column_name, data_type
+          FROM information_schema.columns
+          WHERE table_name = 'users'
+          ORDER BY ordinal_position;
+          SELECT indexname FROM pg_indexes WHERE tablename = 'users';
+          SQL
+
+  containers:
+    name: Container images build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/api.Dockerfile
+          push: false
+          tags: mythweaver-api:ci
+      - name: Build web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/web.Dockerfile
+          push: false
+          tags: mythweaver-web:ci
