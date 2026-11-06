@@ -99,7 +99,8 @@ export const campaignRoutes: FastifyPluginAsyncZod<CampaignRoutesOptions> = asyn
         summary: 'Soft-delete a campaign (requires its exact name)',
         params: CampaignParamsSchema,
         body: DeleteCampaignRequestSchema,
-        response: { 204: {} },
+        // No response schema: `{}` is not a Zod type and breaks OpenAPI generation.
+        // 204 means "no body", so there is nothing to describe.
       },
     },
     async (request, reply) => {

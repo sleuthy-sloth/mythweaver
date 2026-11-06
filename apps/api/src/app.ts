@@ -18,6 +18,8 @@ import type { Database } from './db/client';
 import { AppError } from './lib/errors';
 import { authRoutes } from './modules/auth/routes';
 import { campaignRoutes } from './modules/campaigns/routes';
+import { characterRoutes } from './modules/characters/routes';
+import { rollRoutes } from './modules/rolls/routes';
 import { registerSecurityHooks } from './plugins/security';
 import { healthRoutes } from './routes/health';
 
@@ -96,6 +98,8 @@ export async function buildApp({ config, db, checkDatabase }: AppDeps): Promise<
         { name: 'health', description: 'Liveness and readiness probes' },
         { name: 'auth', description: 'Accounts and sessions' },
         { name: 'campaigns', description: 'Campaigns owned by the caller' },
+        { name: 'characters', description: 'Character sheets' },
+        { name: 'rolls', description: 'Recorded dice resolutions' },
       ],
     },
     transform: jsonSchemaTransform,
@@ -189,6 +193,8 @@ export async function buildApp({ config, db, checkDatabase }: AppDeps): Promise<
 
   await app.register(authRoutes, { prefix: API_PREFIX, db, config });
   await app.register(campaignRoutes, { prefix: API_PREFIX, db });
+  await app.register(characterRoutes, { prefix: API_PREFIX, db });
+  await app.register(rollRoutes, { prefix: API_PREFIX, db });
 
   return app;
 }

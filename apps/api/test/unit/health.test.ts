@@ -118,6 +118,23 @@ describe('error handling', () => {
   });
 });
 
+describe('OpenAPI document', () => {
+  it('generates without error and lists the documented paths', async () => {
+    const app = await buildApp({ config: testConfig(), db: testDb() });
+    const response = await app.inject({ method: 'GET', url: '/api/v1/openapi.json' });
+
+    // A plain object in a response schema makes @fastify/swagger throw at request time, which
+    // turns this endpoint into a 500 long after the route that caused it was written.
+    expect(response.statusCode).toBe(200);
+    const document = response.json() as { openapi: string; paths: Record<string, unknown> };
+    expect(document.openapi).toBe('3.1.0');
+    expect(Object.keys(document.paths)).toContain('/api/v1/campaigns/{campaignId}/rolls');
+    expect(Object.keys(document.paths)).toContain('/api/v1/auth/login');
+
+    await app.close();
+  });
+});
+
 describe('config', () => {
   it('refuses to boot without DATABASE_URL', () => {
     expect(() => loadConfig({ NODE_ENV: 'production' })).toThrow(/DATABASE_URL/);

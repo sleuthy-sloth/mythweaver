@@ -3,10 +3,10 @@
 Self-hosted, multi-user, offline-first platform for solo tabletop role-playing. First ruleset:
 Ironsworn. No third-party accounts, no mandatory AI, and your campaign data stays on your server.
 
-**Status: Phase 2 — accounts and campaigns (API).** The stack runs end to end: health/readiness
-probes, accounts with Argon2id passwords and server-side sessions, private campaigns with
-owner-checked CRUD, Docker Compose and CI. There is still no game: characters, moves and dice
-arrive in Phase 3, and the web shell has no sign-in UI yet. See [PLAN.md](./PLAN.md).
+**Status: Phase 3a — deterministic rules engine, characters and rolls (API).** Accounts, sessions,
+private campaigns, Ironsworn character sheets, and a server-side dice engine with 30 pinned
+mechanics tests. The play loop is not yet usable in a browser: offline storage, sync and the UI
+land in 3b. See [PLAN.md](./PLAN.md) and [docs/rules-coverage.md](./docs/rules-coverage.md).
 
 ## Requirements
 
@@ -64,9 +64,11 @@ needed. To point the web app at a different API, set `VITE_API_BASE_URL`.
 ## Layout
 
 ```text
-apps/api/          Fastify + Drizzle. Health routes, env validation, error envelope.
+apps/api/          Fastify + Drizzle. Routes, auth, campaigns, characters, rolls.
 apps/web/          React + Vite + Tailwind. Mobile-first shell, PWA manifest.
 packages/contracts Zod schemas shared by server and browser.
+packages/rules-core      System-agnostic rules types (Rng, Outcome, tracks, moves).
+packages/rules-ironsworn Ironsworn mechanics: dice, momentum, progress, action rolls.
 infra/             Compose, Dockerfiles, nginx.
 docs/              Architecture, operations, content provenance.
 ```

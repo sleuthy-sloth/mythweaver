@@ -44,6 +44,9 @@ importers:
       '@mythweaver/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@mythweaver/rules-ironsworn':
+        specifier: workspace:*
+        version: link:../../packages/rules-ironsworn
       drizzle-orm:
         specifier: ^0.38.3
         version: 0.38.4(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
@@ -145,6 +148,28 @@ importers:
       zod:
         specifier: ^3.24.1
         version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.7(@types/node@22.20.5)(jiti@1.21.7)(jsdom@25.0.1)(tsx@4.23.15)(yaml@2.9.1)
+
+  packages/rules-core:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.7(@types/node@22.20.5)(jiti@1.21.7)(jsdom@25.0.1)(tsx@4.23.15)(yaml@2.9.1)
+
+  packages/rules-ironsworn:
+    dependencies:
+      '@mythweaver/rules-core':
+        specifier: workspace:*
+        version: link:../rules-core
     devDependencies:
       typescript:
         specifier: ^5.7.2

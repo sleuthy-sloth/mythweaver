@@ -1,10 +1,12 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   index,
   integer,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -128,3 +130,100 @@ export type Session = typeof sessions.$inferSelect;
 export type Campaign = typeof campaigns.$inferSelect;
 export type NewCampaign = typeof campaigns.$inferInsert;
 export type CampaignMember = typeof campaignMembers.$inferSelect;
+
+/**
+ * Ironsworn character sheet. Stats and meters are explicit columns rather than JSON: they are
+ * queried, validated and merged field-by-field during sync, and a JSON blob would defeat that.
+ *
+ * `revision` increments on every accepted change, which is what the Phase 3 sync protocol uses
+ * to detect a stale base revision instead of silently overwriting.
+ */
+export const characters = pgTable(
+  'characters',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    edge: smallint('edge').notNull().default(2),
+    heart: smallint('heart').notNull().default(1),
+    iron: smallint('iron').notNull().default(3),
+    shadow: smallint('shadow').notNull().default(2),
+    wits: smallint('wits').notNull().default(1),
+    health: smallint('health').notNull().default(5),
+    spirit: smallint('spirit').notNull().default(5),
+    supply: smallint('supply').notNull().default(5),
+    momentum: smallint('momentum').notNull().default(2),
+    /** Marked debilities; the momentum reset and maximum are derived from the count. */
+    debilities: text('debilities')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    xp: integer('xp').notNull().default(0),
+    notes: text('notes'),
+    revision: integer('revision').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    nameCheck: check('characters_name_check', sql`char_length(${table.name}) between 1 and 120`),
+    statsCheck: check(
+      'characters_stats_check',
+      sql`${table.edge} between 0 and 5 and ${table.heart} between 0 and 5
+        and ${table.iron} between 0 and 5 and ${table.shadow} between 0 and 5
+        and ${table.wits} between 0 and 5`,
+    ),
+    metersCheck: check(
+      'characters_meters_check',
+      sql`${table.health} between 0 and 5 and ${table.spirit} between 0 and 5
+        and ${table.supply} between 0 and 5`,
+    ),
+    momentumCheck: check('characters_momentum_check', sql`${table.momentum} between -6 and 10`),
+    campaignIdx: index('characters_campaign_id_idx').on(table.campaignId),
+  }),
+);
+
+/**
+ * Rolls are append-only events. The inputs and every die are stored, so a result can be
+ * re-derived and argued about; corrections happen by appending, never by editing history.
+ */
+export const rolls = pgTable(
+  'rolls',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    characterId: uuid('character_id').references(() => characters.id, { onDelete: 'set null' }),
+    moveId: text('move_id'),
+    stat: text('stat').notNull(),
+    adds: integer('adds').notNull().default(0),
+    actionDie: smallint('action_die').notNull(),
+    challenge1: smallint('challenge_1').notNull(),
+    challenge2: smallint('challenge_2').notNull(),
+    actionScore: integer('action_score').notNull(),
+    outcome: text('outcome').notNull(),
+    isMatch: boolean('is_match').notNull().default(false),
+    burned: boolean('burned').notNull().default(false),
+    momentumBefore: smallint('momentum_before'),
+    momentumAfter: smallint('momentum_after'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    outcomeCheck: check(
+      'rolls_outcome_check',
+      sql`${table.outcome} in ('strong_hit', 'weak_hit', 'miss')`,
+    ),
+    statCheck: check(
+      'rolls_stat_check',
+      sql`${table.stat} in ('edge', 'heart', 'iron', 'shadow', 'wits')`,
+    ),
+    campaignCreatedIdx: index('rolls_campaign_created_idx').on(table.campaignId, table.createdAt),
+  }),
+);
+
+export type Character = typeof characters.$inferSelect;
+export type NewCharacter = typeof characters.$inferInsert;
+export type Roll = typeof rolls.$inferSelect;
+export type NewRoll = typeof rolls.$inferInsert;

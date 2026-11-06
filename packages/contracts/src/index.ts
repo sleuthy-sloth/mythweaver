@@ -176,3 +176,119 @@ export const DeleteCampaignRequestSchema = z.object({
   confirmName: z.string().trim().min(1).max(120),
 });
 export type DeleteCampaignRequest = z.infer<typeof DeleteCampaignRequestSchema>;
+
+// ---------------------------------------------------------------------------
+// Characters and rolls (Ironsworn sheet model)
+// ---------------------------------------------------------------------------
+
+export const StatSchema = z.enum(['edge', 'heart', 'iron', 'shadow', 'wits']);
+export type Stat = z.infer<typeof StatSchema>;
+
+export const DebilitySchema = z.enum(['wounded', 'shaken', 'unprepared']);
+export type Debility = z.infer<typeof DebilitySchema>;
+
+export const StatsSchema = z.object({
+  edge: z.number().int().min(0).max(5),
+  heart: z.number().int().min(0).max(5),
+  iron: z.number().int().min(0).max(5),
+  shadow: z.number().int().min(0).max(5),
+  wits: z.number().int().min(0).max(5),
+});
+export type Stats = z.infer<typeof StatsSchema>;
+
+export const CharacterSchema = z.object({
+  id: z.string().uuid(),
+  campaignId: z.string().uuid(),
+  name: z.string(),
+  stats: StatsSchema,
+  /** Meters, 0..5 on the sheet. */
+  health: z.number().int().min(0).max(5),
+  spirit: z.number().int().min(0).max(5),
+  supply: z.number().int().min(0).max(5),
+  /** -6..10; the effective maximum drops with marked debilities. */
+  momentum: z.number().int().min(-6).max(10),
+  debilities: z.array(DebilitySchema),
+  xp: z.number().int().min(0),
+  notes: z.string().nullable(),
+  revision: z.number().int().nonnegative(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type Character = z.infer<typeof CharacterSchema>;
+
+/**
+ * Defaults are a starting build, not a validated one: a player assigns +3/+2/+2/+1/+1 in the
+ * book, and the sheet is fully editable. Build legality is not enforced yet (see rules coverage).
+ */
+export const CreateCharacterRequestSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  stats: StatsSchema.default({ edge: 2, heart: 1, iron: 3, shadow: 2, wits: 1 }),
+  health: z.number().int().min(0).max(5).default(5),
+  spirit: z.number().int().min(0).max(5).default(5),
+  supply: z.number().int().min(0).max(5).default(5),
+  momentum: z.number().int().min(-6).max(10).default(2),
+  notes: z.string().trim().max(4000).optional(),
+});
+export type CreateCharacterRequest = z.infer<typeof CreateCharacterRequestSchema>;
+
+export const UpdateCharacterRequestSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    stats: StatsSchema.optional(),
+    health: z.number().int().min(0).max(5).optional(),
+    spirit: z.number().int().min(0).max(5).optional(),
+    supply: z.number().int().min(0).max(5).optional(),
+    momentum: z.number().int().min(-6).max(10).optional(),
+    debilities: z.array(DebilitySchema).max(3).optional(),
+    xp: z.number().int().min(0).max(999).optional(),
+    notes: z.string().trim().max(4000).nullable().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'Provide at least one field to update',
+  });
+export type UpdateCharacterRequest = z.infer<typeof UpdateCharacterRequestSchema>;
+
+export const OutcomeSchema = z.enum(['strong_hit', 'weak_hit', 'miss']);
+export type RollOutcome = z.infer<typeof OutcomeSchema>;
+
+export const RollRequestSchema = z.object({
+  characterId: z.string().uuid(),
+  stat: StatSchema,
+  /** Flat adds from assets or move text, applied to stat before the action die. */
+  adds: z.number().int().min(-5).max(10).default(0),
+  /** Spend positive momentum: cancels challenge dice below it, then resets momentum. */
+  burnMomentum: z.boolean().default(false),
+  /** Optional move id for the journal; moves themselves are data, not server logic. */
+  moveId: z.string().trim().max(64).optional(),
+});
+export type RollRequest = z.infer<typeof RollRequestSchema>;
+
+export const RollSchema = z.object({
+  id: z.string().uuid(),
+  campaignId: z.string().uuid(),
+  characterId: z.string().uuid().nullable(),
+  moveId: z.string().nullable(),
+  stat: StatSchema,
+  adds: z.number().int(),
+  actionDie: z.number().int(),
+  /** A burned die is stored as 0 so the record shows why it counted as beaten. */
+  challenge: z.tuple([z.number().int(), z.number().int()]),
+  actionScore: z.number().int(),
+  outcome: OutcomeSchema,
+  match: z.boolean(),
+  burned: z.boolean(),
+  momentumBefore: z.number().int().nullable(),
+  momentumAfter: z.number().int().nullable(),
+  createdAt: z.string().datetime(),
+});
+export type Roll = z.infer<typeof RollSchema>;
+
+export const RollListResponseSchema = z.object({
+  rolls: z.array(RollSchema),
+});
+export type RollListResponse = z.infer<typeof RollListResponseSchema>;
+
+export const CharacterListResponseSchema = z.object({
+  characters: z.array(CharacterSchema),
+});
+export type CharacterListResponse = z.infer<typeof CharacterListResponseSchema>;

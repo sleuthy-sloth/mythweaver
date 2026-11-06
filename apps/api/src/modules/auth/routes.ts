@@ -5,6 +5,7 @@ import {
   type SessionResponse,
 } from '@mythweaver/contracts';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { z } from 'zod';
 import type { AppConfig } from '../../config';
 import type { Database } from '../../db/client';
 import { badRequest } from '../../lib/errors';
@@ -80,7 +81,9 @@ export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = async (app, 
   app.post(
     '/auth/logout',
     {
-      schema: { tags: ['auth'], summary: 'End the current session', response: { 204: {} } },
+      // No response schema on purpose: 204 carries no body, and an empty object is not a
+      // Zod type — passing one makes OpenAPI generation fail at request time.
+      schema: { tags: ['auth'], summary: 'End the current session' },
     },
     async (request, reply) => {
       if (request.sessionId) {
@@ -116,7 +119,8 @@ export const authRoutes: FastifyPluginAsyncZod<AuthRoutesOptions> = async (app, 
       schema: {
         tags: ['auth'],
         summary: 'Read the CSRF token cookie value',
-        response: { 200: { type: 'object', properties: { header: { type: 'string' } } } },
+        // Must be a Zod schema, not a raw JSON Schema object, or OpenAPI generation throws.
+        response: { 200: z.object({ header: z.string() }) },
       },
     },
     async (request) => {

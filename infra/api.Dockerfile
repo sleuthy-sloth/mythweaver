@@ -5,11 +5,15 @@ RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/contracts/package.json packages/contracts/package.json
+COPY packages/rules-core/package.json packages/rules-core/package.json
+COPY packages/rules-ironsworn/package.json packages/rules-ironsworn/package.json
 COPY apps/api/package.json apps/api/package.json
 RUN pnpm install --frozen-lockfile --filter @mythweaver/api...
 
 COPY tsconfig.base.json ./
 COPY packages/contracts packages/contracts
+COPY packages/rules-core packages/rules-core
+COPY packages/rules-ironsworn packages/rules-ironsworn
 COPY apps/api apps/api
 RUN pnpm --filter @mythweaver/api build
 

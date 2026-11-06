@@ -235,3 +235,38 @@ Deviations and findings worth recording:
 Known gaps after Phase 2: no auth UI, no password change/reset/verification/2FA, no account
 deletion or export, no sharing endpoints exposed (schema supports them), rate limits are
 in-process only, and the SPA still has no campaign views.
+
+## Phase 3a delivery record (2026-11-06)
+
+Delivered: `packages/rules-core` (system-agnostic vocabulary) and `packages/rules-ironsworn`
+(pure mechanics), character sheets with stats/meters/momentum/debilities/xp, the roll endpoint that
+resolves and records a roll atomically, and momentum burning that resets the sheet in the same
+transaction. Migration `0002` adds `characters` and `rolls`.
+
+Evidence (commands run, results observed):
+
+| Command                                              | Result                                                                                                        |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `pnpm --filter @mythweaver/rules-ironsworn test`     | 30/30 — comparison, ties, matches, negative momentum, burning, resets, limits, progress marks, progress rolls |
+| `pnpm test:integration`                              | 34/34 — includes characters CRUD, isolation, roll consistency, burn transaction, unauthenticated access       |
+| `pnpm typecheck` / `lint` / `format:check` / `build` | clean                                                                                                         |
+| `pnpm db:migrate`                                    | `0002` applied; `characters` and `rolls` present with check constraints                                       |
+
+Findings:
+
+1. **Negative momentum matches the action die by magnitude, not by sign.** The first implementation
+   compared `-3 === 3`, which is never true; the scripted-dice test caught it and the engine now
+   uses `Math.abs(momentum) === actionDie`.
+2. **The engine never applies move consequences.** Only burning touches the sheet. Positive or
+   negative momentum from a move is the player's edit, because the server does not know which move
+   was narrated and inventing "+1 momentum" would be wrong for most of them.
+3. **Moves and oracles are not shipped as content.** `MoveDefinition` exists, but no text, table or
+   asset is bundled — that needs per-file provenance, and the coverage doc says so.
+4. **OpenAPI generation was silently broken by two response schemas.** `204: {}` on logout and
+   campaign delete, and a raw JSON Schema object on `/auth/csrf`, are not Zod types; `app.swagger()`
+   threw at request time, so `/api/v1/openapi.json` returned 500 while every other route worked.
+   Both are fixed, and a unit test now requests the document and asserts the paths — the endpoint
+   that documents the API had no test of its own until this phase.
+
+Not in 3a (planned 3b/3c): Dexie storage and outbox, sync push/pull, conflict handling, the
+sign-in and play UI, vows/progress-track persistence, oracles, assets, experience rules.
