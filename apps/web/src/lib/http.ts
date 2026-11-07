@@ -16,6 +16,8 @@ import {
   NpcSchema,
   RelationshipListResponseSchema,
   RelationshipSchema,
+  ImportPreviewSchema,
+  ImportResultSchema,
   SessionResponseSchema,
   type Campaign,
   type Character,
@@ -255,6 +257,26 @@ export const api = {
     request<void>(`/campaigns/${campaignId}/relationships/${relationshipId}`, null, {
       method: 'DELETE',
     }),
+
+  /** Returns the file as text plus the name the server chose for it. */
+  exportCampaign: async (campaignId: string) => {
+    const response = await fetch(`${BASE}/campaigns/${campaignId}/export`, {
+      credentials: 'same-origin',
+      headers: { accept: 'application/json' },
+    });
+    if (!response.ok) {
+      throw new ApiError(response.status, 'export_failed', 'Could not export this campaign');
+    }
+    const disposition = response.headers.get('content-disposition') ?? '';
+    const match = disposition.match(/filename="([^"]+)"/);
+    return { text: await response.text(), filename: match?.[1] ?? 'campaign.json' };
+  },
+
+  previewImport: (bundle: unknown) =>
+    request('/imports/preview', ImportPreviewSchema, { method: 'POST', body: bundle }),
+
+  importCampaign: (bundle: unknown) =>
+    request('/imports', ImportResultSchema, { method: 'POST', body: bundle }),
 
   listJournal: (campaignId: string, query = '') =>
     request(

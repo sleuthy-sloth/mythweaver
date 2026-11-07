@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-import type { Campaign } from '@mythweaver/contracts';
+import { Link, useNavigate } from 'react-router-dom';
+import type { Campaign, ImportPreview } from '@mythweaver/contracts';
 import { Button, Field, Panel, TextInput } from '../components/ui';
 import { describeError, useAuth } from '../lib/auth';
 import { ApiError, api } from '../lib/http';
 
 export default function CampaignsPage() {
   const { user, handleUnauthorized } = useAuth();
+  const navigate = useNavigate();
   const [campaigns, setCampaigns] = useState<Campaign[] | null>(null);
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +84,14 @@ export default function CampaignsPage() {
         </p>
       ) : null}
 
+      <ImportPanel
+        onImported={async (campaignId) => {
+          await load();
+          navigate(`/campaigns/${campaignId}`);
+        }}
+        onUnauthorized={handleUnauthorized}
+      />
+
       <section aria-labelledby="list-heading" className="space-y-3">
         <div className="flex items-baseline justify-between">
           <h2 id="list-heading" className="text-xl">
@@ -131,5 +140,125 @@ export default function CampaignsPage() {
         </ul>
       </section>
     </div>
+  );
+}
+
+/**
+ * Import is two steps on purpose: the file is checked and summarized first, and nothing is written
+ * until the player confirms what they are about to add.
+ */
+function ImportPanel({
+  onImported,
+  onUnauthorized,
+}: {
+  onImported: (campaignId: string) => Promise<void>;
+  onUnauthorized: () => void;
+}) {
+  const [bundle, setBundle] = useState<unknown>(null);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const choose = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    setPreview(null);
+    setBundle(null);
+    try {
+      const text = await file.text();
+      const parsed: unknown = JSON.parse(text);
+      setPreview(await api.previewImport(parsed));
+      setBundle(parsed);
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        onUnauthorized();
+        return;
+      }
+      setError(
+        caught instanceof SyntaxError ? 'That file is not valid JSON.' : describeError(caught),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirm = async () => {
+    if (!bundle) return;
+    setBusy(true);
+    try {
+      const result = await api.importCampaign(bundle);
+      setPreview(null);
+      setBundle(null);
+      await onImported(result.campaignId);
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        onUnauthorized();
+        return;
+      }
+      setError(describeError(caught));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Panel eyebrow="Bring one in" title="Import a campaign file">
+      <p className="m-0 mb-3 text-sm text-muted">
+        A Mythweaver export becomes a new campaign you own. Nothing in it can run code or touch an
+        existing campaign.
+      </p>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="btn btn-secondary cursor-pointer" htmlFor="import-file">
+          {busy ? 'Checking…' : 'Choose a file'}
+        </label>
+        <input
+          id="import-file"
+          type="file"
+          accept="application/json,.json"
+          className="sr-only"
+          onChange={(event) => void choose(event.target.files?.[0])}
+        />
+      </div>
+
+      {error ? (
+        <p className="alert mt-3" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      {preview ? (
+        <div className="mt-3 flex flex-col gap-2 border-t border-rule pt-3">
+          <p className="m-0 text-sm">
+            <strong>{preview.campaignName}</strong> — {preview.counts.characters} characters,{' '}
+            {preview.counts.npcs} people, {preview.counts.factions} factions,{' '}
+            {preview.counts.locations} places, {preview.counts.journal} journal entries,{' '}
+            {preview.counts.rolls} rolls.
+          </p>
+          {preview.warnings.length > 0 ? (
+            <ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs text-muted">
+              {preview.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" onClick={() => void confirm()} busy={busy}>
+              Import it
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setPreview(null);
+                setBundle(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </Panel>
   );
 }

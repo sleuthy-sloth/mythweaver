@@ -482,3 +482,95 @@ export const UpdateJournalRequestSchema = z
   .refine((value) => Object.keys(value).length > 0, { message: 'Provide at least one field' });
 
 export const JournalListResponseSchema = z.object({ entries: z.array(JournalEntrySchema) });
+
+// ---------------------------------------------------------------------------
+// Export / import
+// ---------------------------------------------------------------------------
+
+export const EXPORT_FORMAT = 'mythweaver.campaign';
+export const EXPORT_VERSION = 1;
+
+/**
+ * A campaign leaves the server as one self-contained JSON document. Identifiers inside are the
+ * ones from the export; an import remaps them, so two bundles never collide.
+ */
+export const ExportCampaignSchema = z.object({
+  name: z.string(),
+  description: z.string().nullable(),
+  rulesetId: z.string(),
+  rulesetVersion: z.string().nullable(),
+});
+
+export const ExportCharacterSchema = CharacterSchema.omit({
+  campaignId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const ExportNpcSchema = NpcSchema.omit({
+  campaignId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const ExportFactionSchema = FactionSchema.omit({
+  campaignId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const ExportLocationSchema = LocationSchema.omit({
+  campaignId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const ExportRelationshipSchema = RelationshipSchema.omit({
+  campaignId: true,
+  createdAt: true,
+});
+export const ExportJournalSchema = JournalEntrySchema.omit({
+  campaignId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const ExportRollSchema = RollSchema.omit({ campaignId: true, createdAt: true });
+
+export const CampaignBundleSchema = z
+  .object({
+    format: z.literal(EXPORT_FORMAT),
+    version: z.literal(EXPORT_VERSION),
+    exportedAt: z.string().datetime(),
+    campaign: ExportCampaignSchema,
+    characters: z.array(ExportCharacterSchema),
+    npcs: z.array(ExportNpcSchema),
+    factions: z.array(ExportFactionSchema),
+    locations: z.array(ExportLocationSchema),
+    relationships: z.array(ExportRelationshipSchema),
+    journal: z.array(ExportJournalSchema),
+    rolls: z.array(ExportRollSchema),
+  })
+  .strict();
+
+export const CampaignExportSchema = CampaignBundleSchema.extend({
+  /** sha256 over the canonical JSON of every other field, so a hand-edited file is noticeable. */
+  checksum: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+});
+export type CampaignExport = z.infer<typeof CampaignExportSchema>;
+export type CampaignBundle = z.infer<typeof CampaignBundleSchema>;
+
+export const ImportPreviewSchema = z.object({
+  campaignName: z.string(),
+  counts: z.object({
+    characters: z.number().int(),
+    npcs: z.number().int(),
+    factions: z.number().int(),
+    locations: z.number().int(),
+    relationships: z.number().int(),
+    journal: z.number().int(),
+    rolls: z.number().int(),
+  }),
+  warnings: z.array(z.string()),
+});
+
+export type ImportPreview = z.infer<typeof ImportPreviewSchema>;
+
+export const ImportResultSchema = ImportPreviewSchema.extend({
+  campaignId: z.string().uuid(),
+});

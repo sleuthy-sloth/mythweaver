@@ -409,3 +409,51 @@ editing an entity opens no detail view (rename in place is not wired from the ca
 
 Next bounded task: Phase 4b — map image upload with markers linked to places, plus export/import
 (versioned JSON, validated on the way in) so a campaign can leave the server.
+
+## Phase 4b delivery record (2026-11-06)
+
+Delivered: campaign export and import. One campaign in, one campaign out, with no zip and no
+executable content.
+
+- `GET /campaigns/:id/export` — versioned JSON (`format`, `version: 1`), sha256 checksum over
+  canonical JSON, `Content-Disposition` filename.
+- `POST /imports/preview` — validates and summarizes without writing.
+- `POST /imports` — creates a **new** campaign in one transaction, remapping every identifier and
+  every reference to it.
+- UI: **Export** on the campaign header downloads the file; **Import a campaign file** on the
+  campaigns list previews, warns, then imports.
+
+Validation: format marker, supported version, checksum, every relationship endpoint resolving
+inside the file, 5 MB cap, and the whole thing behind the campaign membership check.
+
+Evidence:
+
+| Check                                      | Result                                                                                                                                                                   |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm test:integration`                    | 65/65 — 9 new (round-trip, double import, tampered file, wrong format, dangling edge, size cap, cross-account 404, unauthenticated 401)                                  |
+| `pnpm test`                                | rules 30, api 12, web 17                                                                                                                                                 |
+| `pnpm lint` / `format:check` / `typecheck` | clean                                                                                                                                                                    |
+| Browser export                             | 3.8 KB `browser-walkthrough-1.json` downloaded from the header button                                                                                                    |
+| Browser import                             | file chosen in the UI → preview "Browser Walkthrough — 1 characters, 1 people, 1 factions, 1 places, 1 journal entries, 4 rolls" → imported → landed on the new campaign |
+| Database                                   | two campaigns with identical counts; `2 npcs, 2 distinct ids` — a copy, not a pointer                                                                                    |
+
+Findings:
+
+1. **Import created an invisible campaign.** The first implementation inserted `campaigns.owner_id`
+   but not the `campaign_members` row. Every read path joins membership, so the imported campaign
+   existed and was unreachable: the list showed one campaign, not three. Ownership is stored twice
+   in this schema and both writes are required.
+2. **Validating twice broke the second call.** `importCampaign` called `previewImport`, which
+   re-parsed the bundle — but `validateBundle` returns the bundle without its checksum, so the
+   second parse failed on a document the first had already accepted. Validation that needs the
+   checksum now runs exactly once.
+3. **The client upload path needs its own limit.** Fastify's global 1 MB body limit is right for
+   normal API traffic; the import routes raise it locally to 6 MB and the service enforces 5 MB, so
+   the two numbers are not accidentally the same.
+
+Known gaps: media (maps, images) is not in the format because maps do not exist yet; no partial
+import; shares are not restored by an import (a copy comes back private).
+
+Next bounded task: Phase 4c — maps: an uploaded image per campaign, markers with normalized
+coordinates linked to places, attribution fields for any future tile source, and the same treatment
+in the export format (version bump to 2).

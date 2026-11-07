@@ -56,6 +56,8 @@ export default function CampaignPage() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [rolls, setRolls] = useState<Roll[]>([]);
   const [lastRoll, setLastRoll] = useState<Roll | null>(null);
+  const [exporting, setExporting] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /** Network failed and this campaign was never cached: different problem from a 404. */
@@ -90,6 +92,23 @@ export default function CampaignPage() {
     },
     [handleUnauthorized],
   );
+
+  const saveExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const { text, filename } = await api.exportCampaign(id);
+      const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (caught) {
+      fail(caught);
+    } finally {
+      setExporting(false);
+    }
+  }, [id, fail]);
 
   /**
    * Cache first, network second. The sheet paints from IndexedDB immediately and the fresh copy
@@ -384,6 +403,9 @@ export default function CampaignPage() {
             <h1 className="mt-0.5 text-3xl leading-tight">{campaign.name}</h1>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={() => void saveExport()} busy={exporting}>
+              Export
+            </Button>
             <Link
               to={`/campaigns/${id}/world`}
               className="rounded-sm border border-rule px-3 py-2 text-sm text-ink no-underline hover:bg-paper-sunk"
