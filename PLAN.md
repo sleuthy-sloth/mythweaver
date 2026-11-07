@@ -457,3 +457,43 @@ import; shares are not restored by an import (a copy comes back private).
 Next bounded task: Phase 4c — maps: an uploaded image per campaign, markers with normalized
 coordinates linked to places, attribution fields for any future tile source, and the same treatment
 in the export format (version bump to 2).
+
+## Phase 4c delivery record (2026-11-06)
+
+Delivered: maps, and export format version 2.
+
+- One map per campaign: PNG or JPEG, 2 MB cap, format decided by reading the file's bytes, stored as
+  `bytea` so it rides in the database backup, served behind the membership check.
+- Markers with normalized 0..1 coordinates, a label, and an optional link to a place (`on delete set
+null`), placed by tapping the image.
+- Attribution stored per map for future tile sources; nothing is ever fetched from a tile provider.
+- Export v2 carries the map as base64 plus its markers; **v1 files still import**, normalized forward.
+
+Evidence:
+
+| Check                                      | Result                                                                                                                                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm test:integration`                    | 76/76 — 11 new (upload/sniff/serve, non-image rejected, replace, cross-account, marker CRUD, off-image coordinates, foreign place, marker-without-map, cascade delete, map round-trip, v1 import) |
+| `pnpm test`                                | rules 30, api 12, web 17                                                                                                                                                                          |
+| `pnpm lint` / `format:check` / `typecheck` | clean                                                                                                                                                                                             |
+| Browser                                    | uploaded a 900×600 PNG through the UI, tapped the map, placed "Waystone Inn", attribution field present                                                                                           |
+| Database                                   | `test-map                                                                                                                                                                                         | image/png | 900 | 600 | 4276 bytes | revision 1`; marker at `0.348, 0.549` — the tap |
+| Export                                     | `version: 2`, map present, 4278 decoded bytes, markers `["Waystone Inn"]`                                                                                                                         |
+
+Findings:
+
+1. **A string replace hit the wrong occurrence, again.** Adding map schemas to the client's import
+   list matched a _usage_ inside `listJournal` instead of the import block, producing a file that
+   typechecked as "expected 2-3 arguments, got 5" only after a second edit. Phase 4a's misplaced link
+   was the same failure mode. Replace anchored on unique surrounding text, and assert the result.
+2. **The sniffer, not the client, decides the type.** A file renamed `.png` is rejected because the
+   magic bytes say otherwise; the declared `Content-Type` is ignored entirely.
+3. **Normalized coordinates are the feature.** Storing pixels would have put every marker in the
+   wrong place the first time the map was viewed on a phone.
+
+Known gaps: no zoom/pan, markers cannot be dragged, one map per campaign, no map in the PWA offline
+cache (the image is fetched on demand).
+
+Next: Phase 5 — the optional AI layer, or Phase 6 hardening (backup/restore drill, accessibility
+pass, multi-arch images). The release checklist still wants the backup drill and an accessibility
+review more than it wants AI.

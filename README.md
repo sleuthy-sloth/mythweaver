@@ -3,13 +3,15 @@
 Self-hosted, multi-user, offline-first platform for solo tabletop role-playing. First ruleset:
 Ironsworn. No third-party accounts, no mandatory AI, and your campaign data stays on your server.
 
-**Status: Phase 4b — world, journal, export/import.** Sign in, open a campaign, play with the network gone, and
+**Status: Phase 4c — world, journal, maps, export/import.** Sign in, open a campaign, play with the network gone, and
 your edits and rolls queue and send themselves when you reconnect. The shell is installed by a
 service worker, so the app boots without a connection; campaign data lives in IndexedDB and rolls
 made offline are re-derived by the server from the dice you rolled.
 Campaigns now hold people, factions, places, links between them, and a searchable journal — and a
-campaign leaves the server as a checksummed JSON file that imports back as a new campaign.
-See [PLAN.md](./PLAN.md), [docs/exchange.md](./docs/exchange.md), [docs/world.md](./docs/world.md), [docs/rules-coverage.md](./docs/rules-coverage.md)
+campaign leaves the server as a checksummed JSON file that imports back as a new campaign, map and
+markers included.
+See [PLAN.md](./PLAN.md), [docs/maps.md](./docs/maps.md), [docs/exchange.md](./docs/exchange.md),
+[docs/world.md](./docs/world.md), [docs/rules-coverage.md](./docs/rules-coverage.md)
 and [docs/offline.md](./docs/offline.md).
 
 ## Requirements

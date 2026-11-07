@@ -488,7 +488,7 @@ export const JournalListResponseSchema = z.object({ entries: z.array(JournalEntr
 // ---------------------------------------------------------------------------
 
 export const EXPORT_FORMAT = 'mythweaver.campaign';
-export const EXPORT_VERSION = 1;
+export const EXPORT_VERSION = 2;
 
 /**
  * A campaign leaves the server as one self-contained JSON document. Identifiers inside are the
@@ -536,6 +536,25 @@ export const CampaignBundleSchema = z
   .object({
     format: z.literal(EXPORT_FORMAT),
     version: z.literal(EXPORT_VERSION),
+    /** One map per campaign in v2; null when the campaign has none. */
+    exportedAt: z.string().datetime(),
+    campaign: ExportCampaignSchema,
+    characters: z.array(ExportCharacterSchema),
+    npcs: z.array(ExportNpcSchema),
+    factions: z.array(ExportFactionSchema),
+    locations: z.array(ExportLocationSchema),
+    relationships: z.array(ExportRelationshipSchema),
+    journal: z.array(ExportJournalSchema),
+    rolls: z.array(ExportRollSchema),
+    map: z.lazy(() => ExportMapSchema).nullable(),
+  })
+  .strict();
+
+/** A v1 file as it was written: same shape, no map, checksum at the top. */
+export const CampaignBundleV1Schema = z
+  .object({
+    format: z.literal(EXPORT_FORMAT),
+    version: z.literal(1),
     exportedAt: z.string().datetime(),
     campaign: ExportCampaignSchema,
     characters: z.array(ExportCharacterSchema),
@@ -573,4 +592,89 @@ export type ImportPreview = z.infer<typeof ImportPreviewSchema>;
 
 export const ImportResultSchema = ImportPreviewSchema.extend({
   campaignId: z.string().uuid(),
+});
+
+// ---------------------------------------------------------------------------
+// Maps
+// ---------------------------------------------------------------------------
+
+export const MAP_MIME_TYPES = ['image/png', 'image/jpeg'] as const;
+export const MapMimeSchema = z.enum(MAP_MIME_TYPES);
+export type MapMime = z.infer<typeof MapMimeSchema>;
+
+export const MapMarkerSchema = z.object({
+  id: z.string().uuid(),
+  campaignId: z.string().uuid(),
+  /** Normalized 0..1 so a marker lands on the same spot at any display size. */
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  label: z.string(),
+  locationId: z.string().uuid().nullable(),
+  createdAt: z.string().datetime(),
+});
+export type MapMarker = z.infer<typeof MapMarkerSchema>;
+
+export const CampaignMapSchema = z.object({
+  id: z.string().uuid(),
+  campaignId: z.string().uuid(),
+  name: z.string(),
+  mimeType: MapMimeSchema,
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  /** Who made the image, and under what licence. Empty for a picture the player drew. */
+  attribution: z.string().nullable(),
+  revision: z.number().int().nonnegative(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type CampaignMap = z.infer<typeof CampaignMapSchema>;
+
+export const MapResponseSchema = z.object({
+  map: CampaignMapSchema.nullable(),
+  markers: z.array(MapMarkerSchema),
+});
+
+export const UpdateMapRequestSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    attribution: z.string().trim().max(400).nullable().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'Provide at least one field' });
+
+export const CreateMarkerRequestSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  label: z.string().trim().min(1).max(120),
+  locationId: z.string().uuid().nullable().optional(),
+});
+
+export const UpdateMarkerRequestSchema = z
+  .object({
+    x: z.number().min(0).max(1).optional(),
+    y: z.number().min(0).max(1).optional(),
+    label: z.string().trim().min(1).max(120).optional(),
+    locationId: z.string().uuid().nullable().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'Provide at least one field' });
+
+/** 2 MB of image; base64 grows it by a third, which the import cap accounts for. */
+export const MAX_MAP_BYTES = 2 * 1024 * 1024;
+
+export const ExportMapSchema = z.object({
+  name: z.string(),
+  mimeType: MapMimeSchema,
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  attribution: z.string().nullable(),
+  /** Base64 of the original bytes, so the file stays a single readable document. */
+  dataBase64: z.string().max(Math.ceil(MAX_MAP_BYTES * 1.4)),
+  markers: z.array(
+    z.object({
+      id: z.string().uuid(),
+      x: z.number(),
+      y: z.number(),
+      label: z.string(),
+      locationId: z.string().uuid().nullable(),
+    }),
+  ),
 });

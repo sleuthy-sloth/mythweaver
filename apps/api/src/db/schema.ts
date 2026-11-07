@@ -2,6 +2,8 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  customType,
+  doublePrecision,
   jsonb,
   index,
   integer,
@@ -410,3 +412,65 @@ export type WorldLocation = typeof locations.$inferSelect;
 export type Npc = typeof npcs.$inferSelect;
 export type Relationship = typeof relationships.$inferSelect;
 export type JournalEntry = typeof journalEntries.$inferSelect;
+
+/** Postgres bytea, so an uploaded map lives in the same backup as everything else. */
+const bytea = customType<{ data: Buffer; notNull: true; default: false }>({
+  dataType() {
+    return 'bytea';
+  },
+});
+
+/**
+ * One map per campaign for now, enforced by the unique index. A campaign that wants several
+ * regional maps would drop that index rather than change the code that reads the map.
+ */
+export const campaignMaps = pgTable(
+  'campaign_maps',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    name: text('name').notNull().default('Map'),
+    mimeType: text('mime_type').notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    attribution: text('attribution'),
+    image: bytea('image').notNull(),
+    revision: integer('revision').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    onePerCampaign: uniqueIndex('campaign_maps_campaign_id_key').on(table.campaignId),
+    mimeCheck: check(
+      'campaign_maps_mime_check',
+      sql`${table.mimeType} in ('image/png', 'image/jpeg')`,
+    ),
+  }),
+);
+
+export const mapMarkers = pgTable(
+  'map_markers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => campaignMaps.id, { onDelete: 'cascade' }),
+    x: doublePrecision('x').notNull(),
+    y: doublePrecision('y').notNull(),
+    label: text('label').notNull(),
+    locationId: uuid('location_id').references(() => locations.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    rangeCheck: check(
+      'map_markers_range_check',
+      sql`${table.x} >= 0 and ${table.x} <= 1 and ${table.y} >= 0 and ${table.y} <= 1`,
+    ),
+    mapIdx: index('map_markers_map_id_idx').on(table.mapId),
+  }),
+);

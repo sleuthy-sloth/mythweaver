@@ -21,6 +21,7 @@ import { campaignRoutes } from './modules/campaigns/routes';
 import { characterRoutes } from './modules/characters/routes';
 import { rollRoutes } from './modules/rolls/routes';
 import { exchangeRoutes } from './modules/exchange/routes';
+import { mapRoutes } from './modules/maps/routes';
 import { worldRoutes } from './modules/world/routes';
 import { registerIdempotency } from './plugins/idempotency';
 import { registerSecurityHooks } from './plugins/security';
@@ -109,6 +110,7 @@ export async function buildApp({ config, db, checkDatabase }: AppDeps): Promise<
         { name: 'relationships', description: 'Edges between entities' },
         { name: 'journal', description: 'Session notes and their links' },
         { name: 'exchange', description: 'Campaign export and import' },
+        { name: 'maps', description: 'Campaign map and its markers' },
       ],
     },
     transform: jsonSchemaTransform,
@@ -207,6 +209,7 @@ export async function buildApp({ config, db, checkDatabase }: AppDeps): Promise<
   await app.register(rollRoutes, { prefix: API_PREFIX, db });
   await app.register(worldRoutes, { prefix: API_PREFIX, db });
   await app.register(exchangeRoutes, { prefix: API_PREFIX, db });
+  await app.register(mapRoutes, { prefix: API_PREFIX, db });
 
   return app;
 }

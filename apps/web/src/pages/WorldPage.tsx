@@ -11,13 +11,15 @@ import type {
 import { Button, Field, Panel, Select, TextArea, TextInput } from '../components/ui';
 import { describeError, useAuth } from '../lib/auth';
 import { ApiError, api, type WorldEntity } from '../lib/http';
+import MapTab from './MapTab';
 
-type Tab = 'npc' | 'faction' | 'location' | 'journal';
+type Tab = 'npc' | 'faction' | 'location' | 'map' | 'journal';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'npc', label: 'People' },
   { id: 'faction', label: 'Factions' },
   { id: 'location', label: 'Places' },
+  { id: 'map', label: 'Map' },
   { id: 'journal', label: 'Journal' },
 ];
 
@@ -98,6 +100,7 @@ export default function WorldPage() {
           entry.title.toLowerCase().includes(term) || entry.body.toLowerCase().includes(term),
       );
     }
+    if (tab === 'map') return [];
     const kindEntities = entities.filter((entity) => kindOf(entity) === tab);
     if (!term) return kindEntities;
     return kindEntities.filter(
@@ -184,7 +187,7 @@ export default function WorldPage() {
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-48 flex-1">
+        <div className={tab === 'map' ? 'hidden' : 'min-w-48 flex-1'}>
           <Field label={tab === 'journal' ? 'Search the journal' : 'Search'} htmlFor="world-search">
             <TextInput
               id="world-search"
@@ -194,9 +197,11 @@ export default function WorldPage() {
             />
           </Field>
         </div>
-        <Button variant="secondary" onClick={() => setAdding((open) => !open)}>
-          {adding ? 'Close' : tab === 'journal' ? 'Write an entry' : 'Add'}
-        </Button>
+        {tab !== 'map' && (
+          <Button variant="secondary" onClick={() => setAdding((open) => !open)}>
+            {adding ? 'Close' : tab === 'journal' ? 'Write an entry' : 'Add'}
+          </Button>
+        )}
       </div>
 
       {error && (
@@ -205,7 +210,16 @@ export default function WorldPage() {
         </p>
       )}
 
+      {tab === 'map' ? (
+        <MapTab
+          campaignId={id}
+          places={entities.filter((entity) => isLocation(entity)) as WorldLocation[]}
+          onError={fail}
+        />
+      ) : null}
+
       {adding &&
+        tab !== 'map' &&
         (tab === 'journal' ? (
           <JournalForm
             campaignId={id}

@@ -1,5 +1,6 @@
 import {
   ApiErrorSchema,
+  CampaignMapSchema,
   CharacterListResponseSchema,
   CharacterSchema,
   CampaignListResponseSchema,
@@ -10,6 +11,8 @@ import {
   FactionSchema,
   JournalEntrySchema,
   JournalListResponseSchema,
+  MapMarkerSchema,
+  MapResponseSchema,
   LocationListResponseSchema,
   LocationSchema,
   NpcListResponseSchema,
@@ -274,6 +277,49 @@ export const api = {
 
   previewImport: (bundle: unknown) =>
     request('/imports/preview', ImportPreviewSchema, { method: 'POST', body: bundle }),
+
+  getMap: (campaignId: string) => request(`/campaigns/${campaignId}/map`, MapResponseSchema),
+
+  /** The image is sent as raw bytes so the server sniffs the format instead of trusting a name. */
+  uploadMap: async (campaignId: string, file: File, name: string) => {
+    const headers: Record<string, string> = {
+      accept: 'application/json',
+      'content-type': file.type || 'application/octet-stream',
+    };
+    const csrf = readCsrfToken();
+    if (csrf) headers['x-csrf-token'] = csrf;
+
+    const response = await fetch(
+      `${BASE}/campaigns/${campaignId}/map?name=${encodeURIComponent(name)}`,
+      { method: 'PUT', headers, body: file, credentials: 'same-origin' },
+    );
+    const payload: unknown = await response.json().catch(() => null);
+    if (!response.ok) {
+      const parsed = ApiErrorSchema.safeParse(payload);
+      throw parsed.success
+        ? new ApiError(response.status, parsed.data.error.code, parsed.data.error.message)
+        : new ApiError(response.status, 'upload_failed', 'Could not upload that image');
+    }
+    return CampaignMapSchema.parse(payload);
+  },
+
+  deleteMap: (campaignId: string) =>
+    request<void>(`/campaigns/${campaignId}/map`, null, { method: 'DELETE' }),
+
+  updateMap: (campaignId: string, input: { name?: string; attribution?: string | null }) =>
+    request(`/campaigns/${campaignId}/map`, CampaignMapSchema, { method: 'PATCH', body: input }),
+
+  createMarker: (
+    campaignId: string,
+    input: { x: number; y: number; label: string; locationId?: string | null },
+  ) =>
+    request(`/campaigns/${campaignId}/map/markers`, MapMarkerSchema, {
+      method: 'POST',
+      body: input,
+    }),
+
+  deleteMarker: (campaignId: string, markerId: string) =>
+    request<void>(`/campaigns/${campaignId}/map/markers/${markerId}`, null, { method: 'DELETE' }),
 
   importCampaign: (bundle: unknown) =>
     request('/imports', ImportResultSchema, { method: 'POST', body: bundle }),

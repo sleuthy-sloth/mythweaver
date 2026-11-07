@@ -134,7 +134,8 @@ describe('export', () => {
     const bundle = await exportBundle(headers, campaignId);
 
     expect(bundle.format).toBe('mythweaver.campaign');
-    expect(bundle.version).toBe(1);
+    expect(bundle.version).toBe(2);
+    expect(bundle.map).toBeNull();
     expect(bundle.checksum).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect((bundle.characters as unknown[]).length).toBe(1);
     expect((bundle.npcs as unknown[]).length).toBe(1);
@@ -165,6 +166,64 @@ describe('export', () => {
       url: `/api/v1/campaigns/${campaignId}/export`,
     });
     expect(response.statusCode).toBe(401);
+  });
+});
+
+const PNG_1PX = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+describe('export with a map', () => {
+  it('carries the image and markers, and they survive the round trip', async () => {
+    const headers = await account();
+    const { campaignId, placeId } = await populatedCampaign(headers);
+
+    await app.inject({
+      method: 'PUT',
+      url: `/api/v1/campaigns/${campaignId}/map?name=The Reach`,
+      headers: { ...headers, 'content-type': 'image/png' },
+      payload: PNG_1PX,
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/campaigns/${campaignId}/map/markers`,
+      headers,
+      payload: { x: 0.25, y: 0.75, label: 'The inn', locationId: placeId },
+    });
+
+    const bundle = await exportBundle(headers, campaignId);
+    const map = bundle.map as { dataBase64: string; markers: unknown[]; mimeType: string };
+    expect(map.mimeType).toBe('image/png');
+    expect(Buffer.from(map.dataBase64, 'base64')).toEqual(PNG_1PX);
+    expect(map.markers).toHaveLength(1);
+
+    const imported = await app.inject({
+      method: 'POST',
+      url: '/api/v1/imports',
+      headers,
+      payload: bundle,
+    });
+    expect(imported.statusCode).toBe(201);
+
+    const newId = imported.json().campaignId as string;
+    const view = await app.inject({
+      method: 'GET',
+      url: `/api/v1/campaigns/${newId}/map`,
+      headers,
+    });
+    expect(view.json().map.name).toBe('The Reach');
+    expect(view.json().markers).toHaveLength(1);
+    expect(view.json().markers[0].label).toBe('The inn');
+
+    // The marker still points at a place, and that place is the imported copy.
+    const places = await app.inject({
+      method: 'GET',
+      url: `/api/v1/campaigns/${newId}/locations`,
+      headers,
+    });
+    expect(view.json().markers[0].locationId).toBe(places.json().locations[0].id);
+    expect(view.json().markers[0].locationId).not.toBe(placeId);
   });
 });
 
@@ -244,6 +303,33 @@ describe('import', () => {
     });
     expect(rolls.json().rolls).toHaveLength(1);
     expect(journal.json().entries[0].rollId).toBe(rolls.json().rolls[0].id);
+  });
+
+  it('still imports a version 1 file, which has no map', async () => {
+    const headers = await account();
+    const source = await populatedCampaign(headers);
+    const bundle = await exportBundle(headers, source.campaignId);
+
+    const { checksumOf } = await import('../../src/modules/exchange/service');
+    const { checksum: _old, map: _map, ...rest } = bundle as Record<string, unknown>;
+    // A v1 file was written before maps existed: downgrade the version, then hash that shape.
+    const v1fields = { ...rest, version: 1 };
+    const v1 = { ...v1fields, checksum: checksumOf(v1fields as never) };
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/imports',
+      headers,
+      payload: v1,
+    });
+
+    expect(response.statusCode).toBe(201);
+    const view = await app.inject({
+      method: 'GET',
+      url: `/api/v1/campaigns/${response.json().campaignId}/map`,
+      headers,
+    });
+    expect(view.json().map).toBeNull();
   });
 
   it('imports the same file twice without collisions', async () => {

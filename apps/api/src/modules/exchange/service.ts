@@ -1,21 +1,26 @@
 import { createHash } from 'node:crypto';
 import {
+  CampaignBundleV1Schema,
   CampaignExportSchema,
   EXPORT_FORMAT,
   EXPORT_VERSION,
   ImportPreviewSchema,
+  MAX_MAP_BYTES,
   type CampaignBundle,
   type JournalLink,
 } from '@mythweaver/contracts';
 import { asc, eq } from 'drizzle-orm';
+import { z } from 'zod';
 import type { Database } from '../../db/client';
 import {
+  campaignMaps,
   campaignMembers,
   campaigns,
   characters,
   factions,
   journalEntries,
   locations,
+  mapMarkers,
   npcs,
   relationships,
   rolls,
@@ -68,6 +73,16 @@ export async function exportCampaign(
     .select()
     .from(relationships)
     .where(eq(relationships.campaignId, campaignId));
+
+  const [mapRow] = await db
+    .select()
+    .from(campaignMaps)
+    .where(eq(campaignMaps.campaignId, campaignId))
+    .limit(1);
+
+  const markerRows = mapRow
+    ? await db.select().from(mapMarkers).where(eq(mapMarkers.campaignId, campaignId))
+    : [];
 
   const bundle: CampaignBundle = {
     format: EXPORT_FORMAT,
@@ -156,6 +171,23 @@ export async function exportCampaign(
       momentumBefore: row.momentumBefore,
       momentumAfter: row.momentumAfter,
     })),
+    map: mapRow
+      ? {
+          name: mapRow.name,
+          mimeType: mapRow.mimeType as 'image/png' | 'image/jpeg',
+          width: mapRow.width,
+          height: mapRow.height,
+          attribution: mapRow.attribution,
+          dataBase64: Buffer.from(mapRow.image).toString('base64'),
+          markers: markerRows.map((marker) => ({
+            id: marker.id,
+            x: marker.x,
+            y: marker.y,
+            label: marker.label,
+            locationId: marker.locationId,
+          })),
+        }
+      : null,
   };
 
   const document = { ...bundle, checksum: checksumOf(bundle) };
@@ -186,9 +218,16 @@ export function validateBundle(input: unknown): { bundle: CampaignBundle; warnin
     throw badRequest('That file is larger than the 5 MB limit');
   }
 
-  const parsed = CampaignExportSchema.safeParse(
-    typeof input === 'string' ? JSON.parse(input) : input,
-  );
+  const document: unknown = typeof input === 'string' ? JSON.parse(input) : input;
+  const version = (document as { version?: unknown } | null)?.version;
+
+  // Version 1 files predate maps. They are checked against the shape they were written in, then
+  // normalized forward, so the rest of the importer only ever sees one shape.
+  const parsed =
+    version === 1
+      ? CampaignBundleV1Schema.extend({ checksum: z.string() }).safeParse(document)
+      : CampaignExportSchema.safeParse(document);
+
   if (!parsed.success) {
     throw badRequest('This is not a Mythweaver campaign export', {
       issues: parsed.error.issues
@@ -197,11 +236,13 @@ export function validateBundle(input: unknown): { bundle: CampaignBundle; warnin
     });
   }
 
-  const { checksum, ...bundle } = parsed.data;
-  const expected = checksumOf(bundle as CampaignBundle);
+  const { checksum, ...fields } = parsed.data as Record<string, unknown> & { checksum: string };
+  const expected = checksumOf(fields as unknown as CampaignBundle);
   if (checksum !== expected) {
     throw badRequest('This file has been altered since it was exported (checksum mismatch)');
   }
+
+  const bundle = (version === 1 ? { ...fields, version: 2, map: null } : fields) as CampaignBundle;
 
   const characterIds = new Set(bundle.characters.map((row) => row.id));
   const npcIds = new Set(bundle.npcs.map((row) => row.id));
@@ -254,7 +295,22 @@ export function validateBundle(input: unknown): { bundle: CampaignBundle; warnin
     }
   }
 
-  return { bundle: bundle as CampaignBundle, warnings: [...new Set(warnings)] };
+  if (bundle.map) {
+    // Base64 inflates by a third; the decoded image is what has to fit the upload cap.
+    if (Buffer.byteLength(bundle.map.dataBase64, 'base64') > MAX_MAP_BYTES) {
+      throw badRequest('The map in this file is larger than 2 MB');
+    }
+    if (Buffer.byteLength(bundle.map.dataBase64, 'base64') === 0) {
+      throw badRequest('The map in this file has no image data');
+    }
+    for (const marker of bundle.map.markers) {
+      if (marker.locationId && !locationIds.has(marker.locationId)) {
+        warnings.push(`Marker "${marker.label}" points at a place that is not in the file`);
+      }
+    }
+  }
+
+  return { bundle, warnings: [...new Set(warnings)] };
 }
 
 /** Summarizes an already-validated bundle: validation that needs the checksum only runs once. */
@@ -433,6 +489,37 @@ export async function importCampaign(
           revision: row.revision,
         })),
       );
+    }
+
+    if (bundle.map) {
+      const [mapRow] = await tx
+        .insert(campaignMaps)
+        .values({
+          campaignId,
+          name: bundle.map.name.slice(0, 120),
+          mimeType: bundle.map.mimeType,
+          width: bundle.map.width,
+          height: bundle.map.height,
+          attribution: bundle.map.attribution,
+          image: Buffer.from(bundle.map.dataBase64, 'base64'),
+        })
+        .returning({ id: campaignMaps.id });
+
+      if (!mapRow) throw new Error('map insert returned no row');
+
+      if (bundle.map.markers.length > 0) {
+        await tx.insert(mapMarkers).values(
+          bundle.map.markers.map((marker) => ({
+            campaignId,
+            mapId: mapRow.id,
+            x: marker.x,
+            y: marker.y,
+            label: marker.label,
+            locationId:
+              marker.locationId && idMap.has(marker.locationId) ? remap(marker.locationId) : null,
+          })),
+        );
+      }
     }
 
     return { campaignId, preview };
