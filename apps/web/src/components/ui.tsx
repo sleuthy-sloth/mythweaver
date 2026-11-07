@@ -41,21 +41,25 @@ export function Panel({
   eyebrow,
   actions,
   children,
+  className,
 }: {
-  title: string;
+  title?: string;
   eyebrow?: string;
   actions?: ReactNode;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="panel">
-      <div className="panel-head flex flex-wrap items-start justify-between gap-3">
-        <div>
-          {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
-          <h2 className="mt-0.5 text-xl leading-tight">{title}</h2>
+    <section className={className ? `panel ${className}` : 'panel'}>
+      {title ? (
+        <div className="panel-head flex flex-wrap items-start justify-between gap-3">
+          <div>
+            {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
+            <h2 className="mt-0.5 text-xl leading-tight">{title}</h2>
+          </div>
+          {actions}
         </div>
-        {actions}
-      </div>
+      ) : null}
       {children}
     </section>
   );
@@ -101,6 +105,7 @@ export function TextInput({
   inputMode,
   min,
   max,
+  maxLength,
   describedBy,
   className,
 }: {
@@ -114,6 +119,7 @@ export function TextInput({
   inputMode?: 'text' | 'email' | 'numeric';
   min?: number;
   max?: number;
+  maxLength?: number;
   describedBy?: string | undefined;
   className?: string;
 }) {
@@ -130,6 +136,7 @@ export function TextInput({
       inputMode={inputMode ?? undefined}
       min={min ?? undefined}
       max={max ?? undefined}
+      maxLength={maxLength ?? undefined}
       aria-describedby={describedBy ?? undefined}
     />
   );
@@ -377,5 +384,64 @@ export function RollLine({ roll }: { roll: RollRecord }) {
         {roll.actionDie} vs {roll.challenge[0]}/{roll.challenge[1]} · {roll.actionScore}
       </span>
     </li>
+  );
+}
+
+/** Same visual language as TextInput, for notes and journal bodies. */
+export function TextArea({
+  id,
+  value,
+  onChange,
+  rows = 5,
+  maxLength,
+  required,
+  describedBy,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  rows?: number;
+  maxLength?: number;
+  required?: boolean;
+  describedBy?: string | undefined;
+}) {
+  return (
+    <textarea
+      id={id}
+      className="input"
+      rows={rows}
+      value={value}
+      maxLength={maxLength ?? undefined}
+      required={required ?? false}
+      aria-describedby={describedBy ?? undefined}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+}
+
+/** Native select, styled like the rest of the form controls. */
+export function Select({
+  id,
+  value,
+  onChange,
+  children,
+  describedBy,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+  describedBy?: string | undefined;
+}) {
+  return (
+    <select
+      id={id}
+      className="input"
+      value={value}
+      aria-describedby={describedBy ?? undefined}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      {children}
+    </select>
   );
 }

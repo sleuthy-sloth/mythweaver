@@ -383,9 +383,17 @@ export default function CampaignPage() {
             </p>
             <h1 className="mt-0.5 text-3xl leading-tight">{campaign.name}</h1>
           </div>
-          <Button variant="secondary" onClick={toggleArchive}>
-            {campaign.archivedAt ? 'Unarchive' : 'Archive'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/campaigns/${id}/world`}
+              className="rounded-sm border border-rule px-3 py-2 text-sm text-ink no-underline hover:bg-paper-sunk"
+            >
+              World &amp; journal
+            </Link>
+            <Button variant="secondary" onClick={toggleArchive}>
+              {campaign.archivedAt ? 'Unarchive' : 'Archive'}
+            </Button>
+          </div>
         </div>
       </header>
 

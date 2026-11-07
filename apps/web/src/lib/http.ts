@@ -6,6 +6,16 @@ import {
   CampaignSchema,
   RollListResponseSchema,
   RollSchema,
+  FactionListResponseSchema,
+  FactionSchema,
+  JournalEntrySchema,
+  JournalListResponseSchema,
+  LocationListResponseSchema,
+  LocationSchema,
+  NpcListResponseSchema,
+  NpcSchema,
+  RelationshipListResponseSchema,
+  RelationshipSchema,
   SessionResponseSchema,
   type Campaign,
   type Character,
@@ -13,14 +23,25 @@ import {
   type CreateCharacterRequestSchema,
   type Roll,
   type RollRequest,
+  type Faction,
+  type JournalEntry,
+  type JournalLink,
+  type Npc,
+  type Relationship,
   type UpdateCharacterRequest,
   type User,
+  type WorldKind,
+  type WorldLocation,
 } from '@mythweaver/contracts';
 import type { ZodType, z } from 'zod';
 
 /** Request types are the *input* shape, so optional defaults stay optional for callers. */
 type CreateCampaignInput = z.input<typeof CreateCampaignRequestSchema>;
 type CreateCharacterInput = z.input<typeof CreateCharacterRequestSchema>;
+
+export type WorldEntity = Npc | Faction | WorldLocation;
+/** The list key differs per kind, so callers get one shape back. */
+type CreateWorldInput = Record<string, unknown>;
 
 const BASE = '/api/v1';
 
@@ -167,6 +188,101 @@ export const api = {
 
   listRolls: (campaignId: string, limit = 20) =>
     request(`/campaigns/${campaignId}/rolls?limit=${limit}`, RollListResponseSchema),
+
+  // --- world ---------------------------------------------------------------
+
+  async listWorld(campaignId: string, kind: WorldKind, query = ''): Promise<WorldEntity[]> {
+    const suffix = query ? `?q=${encodeURIComponent(query)}` : '';
+    if (kind === 'npc') {
+      return (await request(`/campaigns/${campaignId}/npcs${suffix}`, NpcListResponseSchema)).npcs;
+    }
+    if (kind === 'faction') {
+      return (
+        await request(`/campaigns/${campaignId}/factions${suffix}`, FactionListResponseSchema)
+      ).factions;
+    }
+    return (
+      await request(`/campaigns/${campaignId}/locations${suffix}`, LocationListResponseSchema)
+    ).locations;
+  },
+
+  async createWorld(
+    campaignId: string,
+    kind: WorldKind,
+    input: CreateWorldInput,
+  ): Promise<WorldEntity> {
+    if (kind === 'npc') {
+      return request(`/campaigns/${campaignId}/npcs`, NpcSchema, { method: 'POST', body: input });
+    }
+    if (kind === 'faction') {
+      return request(`/campaigns/${campaignId}/factions`, FactionSchema, {
+        method: 'POST',
+        body: input,
+      });
+    }
+    return request(`/campaigns/${campaignId}/locations`, LocationSchema, {
+      method: 'POST',
+      body: input,
+    });
+  },
+
+  async deleteWorld(campaignId: string, kind: WorldKind, entityId: string): Promise<void> {
+    const path = kind === 'npc' ? 'npcs' : kind === 'faction' ? 'factions' : 'locations';
+    await request<void>(`/campaigns/${campaignId}/${path}/${entityId}`, null, {
+      method: 'DELETE',
+    });
+  },
+
+  listRelationships: (campaignId: string) =>
+    request(`/campaigns/${campaignId}/relationships`, RelationshipListResponseSchema),
+
+  createRelationship: (
+    campaignId: string,
+    input: {
+      sourceType: WorldKind | 'character';
+      sourceId: string;
+      targetType: WorldKind | 'character';
+      targetId: string;
+      kind: string;
+    },
+  ) =>
+    request(`/campaigns/${campaignId}/relationships`, RelationshipSchema, {
+      method: 'POST',
+      body: input,
+    }),
+
+  deleteRelationship: (campaignId: string, relationshipId: string) =>
+    request<void>(`/campaigns/${campaignId}/relationships/${relationshipId}`, null, {
+      method: 'DELETE',
+    }),
+
+  listJournal: (campaignId: string, query = '') =>
+    request(
+      `/campaigns/${campaignId}/journal${query ? `?q=${encodeURIComponent(query)}` : ''}`,
+      JournalListResponseSchema,
+    ),
+
+  createJournalEntry: (
+    campaignId: string,
+    input: { title: string; body?: string; tags?: string[]; links?: JournalLink[] },
+  ) =>
+    request(`/campaigns/${campaignId}/journal`, JournalEntrySchema, {
+      method: 'POST',
+      body: input,
+    }),
+
+  deleteJournalEntry: (campaignId: string, entryId: string) =>
+    request<void>(`/campaigns/${campaignId}/journal/${entryId}`, null, { method: 'DELETE' }),
 };
 
-export type { Campaign, Character, Roll, User };
+export type {
+  Campaign,
+  Character,
+  Faction,
+  JournalEntry,
+  Npc,
+  Relationship,
+  Roll,
+  User,
+  WorldLocation,
+};

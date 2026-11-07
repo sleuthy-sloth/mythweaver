@@ -368,3 +368,44 @@ Findings:
 Known gaps: no offline campaign creation; no cross-device sync protocol (each device caches
 independently and the server is the meeting point); the conflict UI has unit coverage but has not
 been drilled by hand; journals, vows and world entities are still Phase 4.
+
+## Phase 4a delivery record (2026-11-06)
+
+Delivered: the world model and its screen. NPCs, factions, places, edges between them, and journal
+entries with explicit links — all campaign-scoped, all behind the same ownership check as the rest
+of the campaign.
+
+Schema (migration `0004_rich_spectrum.sql`): `npcs`, `factions`, `locations`, `relationships`,
+`journal_entries`. `npcs.faction_id` is a real foreign key (`on delete set null`); relationship
+endpoints are polymorphic and therefore validated in the service, not by the database.
+
+Evidence (this host, this session):
+
+| Check                                    | Result                                                                                                         |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `pnpm typecheck` / `lint`                | clean                                                                                                          |
+| `pnpm test`                              | rules 30, api 12, web 17 (3 new for the World screen)                                                          |
+| `pnpm test:integration`                  | 56/56 — 12 new: CRUD, cross-campaign isolation, faction scoping, search, edge cleanup, stale journal revisions |
+| Browser: create faction + place + person | all three created from the UI at 390×844                                                                       |
+| Browser: link                            | "hunts — Waystone Inn" shown on Cinder's card                                                                  |
+| Browser: journal                         | entry created, linked chip "Cinder", found by searching "chest", excluded for "dragon"                         |
+| Database                                 | `npcs 1, factions 1, locations 1, relationships 1, journal 1`; `Cinder                                         | swordsman | The Chandrian`; edge `npc | hunts | location`; entry `1 link, revision 1` |
+
+Findings:
+
+1. **A silent no-op edit.** The "World & journal" link was inserted by a string replace that matched
+   the _error_ branch instead of the header, and the script printed success unconditionally. The
+   link compiled, passed typecheck, and simply was not on the page. Found by clicking it in a
+   browser, not by any test. Lesson: a build that compiles says nothing about where markup landed.
+2. **Polymorphic edges cost referential integrity.** `relationships` cannot use foreign keys for its
+   endpoints, so deletion has to clean up edges by hand, in one place, with a test that deletes an
+   endpoint and asserts the edge disappears.
+3. **The client contract caught the drift.** A stale API container serving rows without a new field
+   made the client reject good data — the same failure mode as Phase 3c, now twice. Rebuild every
+   image a contract change touches, not only the one being edited.
+
+Known gaps: no map or markers yet; journal links are chips, not navigation; no cross-entity search;
+editing an entity opens no detail view (rename in place is not wired from the card).
+
+Next bounded task: Phase 4b — map image upload with markers linked to places, plus export/import
+(versioned JSON, validated on the way in) so a campaign can leave the server.

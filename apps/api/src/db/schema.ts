@@ -260,3 +260,153 @@ export const idempotencyKeys = pgTable(
     createdIdx: index('idempotency_created_at_idx').on(table.createdAt),
   }),
 );
+
+/**
+ * World entities. Each is campaign-scoped and shares the same shape (name, description, tags,
+ * revision) so one set of routes can serve all three; the differences are the extra columns.
+ */
+export const factions = pgTable(
+  'factions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    tags: text('tags')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    revision: integer('revision').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    nameCheck: check('factions_name_check', sql`char_length(${table.name}) between 1 and 120`),
+    campaignIdx: index('factions_campaign_id_idx').on(table.campaignId),
+  }),
+);
+
+export const locations = pgTable(
+  'locations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    kind: text('kind').notNull().default('other'),
+    description: text('description'),
+    tags: text('tags')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    revision: integer('revision').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    nameCheck: check('locations_name_check', sql`char_length(${table.name}) between 1 and 120`),
+    kindCheck: check(
+      'locations_kind_check',
+      sql`${table.kind} in ('settlement', 'site', 'wilds', 'other')`,
+    ),
+    campaignIdx: index('locations_campaign_id_idx').on(table.campaignId),
+  }),
+);
+
+export const npcs = pgTable(
+  'npcs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    role: text('role'),
+    description: text('description'),
+    factionId: uuid('faction_id').references(() => factions.id, { onDelete: 'set null' }),
+    tags: text('tags')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    revision: integer('revision').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    nameCheck: check('npcs_name_check', sql`char_length(${table.name}) between 1 and 120`),
+    campaignIdx: index('npcs_campaign_id_idx').on(table.campaignId),
+    factionIdx: index('npcs_faction_id_idx').on(table.factionId),
+  }),
+);
+
+/**
+ * Relationships are edges between two campaign entities. The endpoints are polymorphic, so they
+ * cannot be foreign keys; the service resolves both ends inside the campaign before inserting,
+ * which is what keeps a dangling or cross-campaign edge out of the table.
+ */
+export const relationships = pgTable(
+  'relationships',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    sourceType: text('source_type').notNull(),
+    sourceId: uuid('source_id').notNull(),
+    targetType: text('target_type').notNull(),
+    targetId: uuid('target_id').notNull(),
+    kind: text('kind').notNull(),
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    typeCheck: check(
+      'relationships_type_check',
+      sql`${table.sourceType} in ('npc', 'faction', 'location', 'character')
+        and ${table.targetType} in ('npc', 'faction', 'location', 'character')`,
+    ),
+    campaignIdx: index('relationships_campaign_id_idx').on(table.campaignId),
+    sourceIdx: index('relationships_source_idx').on(table.sourceType, table.sourceId),
+    targetIdx: index('relationships_target_idx').on(table.targetType, table.targetId),
+  }),
+);
+
+/**
+ * Journal entries are portable prose plus explicit links. `links` is JSON because it is genuinely
+ * variable — a list of {type,id,label} — and it is validated by the contract on the way in.
+ */
+export const journalEntries = pgTable(
+  'journal_entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    body: text('body').notNull().default(''),
+    tags: text('tags')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    links: jsonb('links')
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    rollId: uuid('roll_id').references(() => rolls.id, { onDelete: 'set null' }),
+    revision: integer('revision').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    titleCheck: check('journal_title_check', sql`char_length(${table.title}) between 1 and 160`),
+    campaignIdx: index('journal_campaign_created_idx').on(table.campaignId, table.createdAt),
+  }),
+);
+
+export type Faction = typeof factions.$inferSelect;
+export type WorldLocation = typeof locations.$inferSelect;
+export type Npc = typeof npcs.$inferSelect;
+export type Relationship = typeof relationships.$inferSelect;
+export type JournalEntry = typeof journalEntries.$inferSelect;

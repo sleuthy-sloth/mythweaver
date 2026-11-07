@@ -3,6 +3,7 @@ import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Emblem } from './components/ui';
 import { useAuth } from './lib/auth';
 import CampaignPage from './pages/CampaignPage';
+import WorldPage from './pages/WorldPage';
 import CampaignsPage from './pages/CampaignsPage';
 import SignInPage from './pages/SignInPage';
 
@@ -83,6 +84,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <CampaignPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/campaigns/:id/world"
+            element={
+              <RequireAuth>
+                <WorldPage />
               </RequireAuth>
             }
           />

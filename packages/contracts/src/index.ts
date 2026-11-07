@@ -308,3 +308,177 @@ export const CharacterListResponseSchema = z.object({
   characters: z.array(CharacterSchema),
 });
 export type CharacterListResponse = z.infer<typeof CharacterListResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// World: NPCs, factions, locations, relationships, journal
+// ---------------------------------------------------------------------------
+
+export const WorldKindSchema = z.enum(['npc', 'faction', 'location']);
+export type WorldKind = z.infer<typeof WorldKindSchema>;
+
+/** Fields every world entity shares. */
+const worldBase = {
+  id: z.string().uuid(),
+  campaignId: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  tags: z.array(z.string()),
+  revision: z.number().int().nonnegative(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+};
+
+export const NpcSchema = z.object({
+  ...worldBase,
+  role: z.string().nullable(),
+  /** The faction this NPC belongs to, if any. A dangling id is cleared on faction delete. */
+  factionId: z.string().uuid().nullable(),
+});
+export type Npc = z.infer<typeof NpcSchema>;
+
+export const FactionSchema = z.object(worldBase);
+export type Faction = z.infer<typeof FactionSchema>;
+
+export const LocationKindSchema = z.enum(['settlement', 'site', 'wilds', 'other']);
+export const LocationSchema = z.object({
+  ...worldBase,
+  kind: LocationKindSchema,
+});
+export type WorldLocation = z.infer<typeof LocationSchema>;
+
+const TagsSchema = z.array(z.string().trim().min(1).max(32)).max(12).default([]);
+
+export const CreateNpcRequestSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  role: z.string().trim().max(60).optional(),
+  description: z.string().trim().max(4000).optional(),
+  factionId: z.string().uuid().nullable().optional(),
+  tags: TagsSchema,
+});
+export type CreateNpcRequest = z.infer<typeof CreateNpcRequestSchema>;
+
+export const UpdateNpcRequestSchema = z
+  .object({
+    baseRevision: z.number().int().min(1).optional(),
+    name: z.string().trim().min(1).max(120).optional(),
+    role: z.string().trim().max(60).nullable().optional(),
+    description: z.string().trim().max(4000).nullable().optional(),
+    factionId: z.string().uuid().nullable().optional(),
+    tags: z.array(z.string().trim().min(1).max(32)).max(12).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'Provide at least one field' });
+
+export const CreateFactionRequestSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(4000).optional(),
+  tags: TagsSchema,
+});
+
+export const UpdateFactionRequestSchema = z
+  .object({
+    baseRevision: z.number().int().min(1).optional(),
+    name: z.string().trim().min(1).max(120).optional(),
+    description: z.string().trim().max(4000).nullable().optional(),
+    tags: z.array(z.string().trim().min(1).max(32)).max(12).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'Provide at least one field' });
+
+export const CreateLocationRequestSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  kind: LocationKindSchema.default('other'),
+  description: z.string().trim().max(4000).optional(),
+  tags: TagsSchema,
+});
+
+export const UpdateLocationRequestSchema = z
+  .object({
+    baseRevision: z.number().int().min(1).optional(),
+    name: z.string().trim().min(1).max(120).optional(),
+    kind: LocationKindSchema.optional(),
+    description: z.string().trim().max(4000).nullable().optional(),
+    tags: z.array(z.string().trim().min(1).max(32)).max(12).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'Provide at least one field' });
+
+export const NpcListResponseSchema = z.object({ npcs: z.array(NpcSchema) });
+export const FactionListResponseSchema = z.object({ factions: z.array(FactionSchema) });
+export const LocationListResponseSchema = z.object({ locations: z.array(LocationSchema) });
+
+/** Edges are plain pairs; both ends are resolved and checked in the service. */
+export const RelationshipTypeSchema = z.enum(['npc', 'faction', 'location', 'character']);
+export type RelationshipType = z.infer<typeof RelationshipTypeSchema>;
+
+export const RelationshipSchema = z.object({
+  id: z.string().uuid(),
+  campaignId: z.string().uuid(),
+  sourceType: RelationshipTypeSchema,
+  sourceId: z.string().uuid(),
+  targetType: RelationshipTypeSchema,
+  targetId: z.string().uuid(),
+  kind: z.string(),
+  note: z.string().nullable(),
+  createdAt: z.string().datetime(),
+});
+export type Relationship = z.infer<typeof RelationshipSchema>;
+
+export const CreateRelationshipRequestSchema = z
+  .object({
+    sourceType: RelationshipTypeSchema,
+    sourceId: z.string().uuid(),
+    targetType: RelationshipTypeSchema,
+    targetId: z.string().uuid(),
+    kind: z.string().trim().min(1).max(40),
+    note: z.string().trim().max(500).optional(),
+  })
+  .refine(
+    (value) => !(value.sourceType === value.targetType && value.sourceId === value.targetId),
+    {
+      message: 'An entity cannot be related to itself',
+    },
+  );
+
+export const RelationshipListResponseSchema = z.object({
+  relationships: z.array(RelationshipSchema),
+});
+
+export const JournalLinkSchema = z.object({
+  type: RelationshipTypeSchema,
+  id: z.string().uuid(),
+  label: z.string().max(120),
+});
+export type JournalLink = z.infer<typeof JournalLinkSchema>;
+
+export const JournalEntrySchema = z.object({
+  id: z.string().uuid(),
+  campaignId: z.string().uuid(),
+  title: z.string(),
+  body: z.string(),
+  tags: z.array(z.string()),
+  links: z.array(JournalLinkSchema),
+  /** Set when the entry was created from a roll. */
+  rollId: z.string().uuid().nullable(),
+  revision: z.number().int().nonnegative(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type JournalEntry = z.infer<typeof JournalEntrySchema>;
+
+export const CreateJournalRequestSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  body: z.string().trim().max(20000).default(''),
+  tags: TagsSchema,
+  links: z.array(JournalLinkSchema).max(20).default([]),
+  rollId: z.string().uuid().optional(),
+});
+
+export const UpdateJournalRequestSchema = z
+  .object({
+    baseRevision: z.number().int().min(1).optional(),
+    title: z.string().trim().min(1).max(160).optional(),
+    body: z.string().trim().max(20000).optional(),
+    tags: z.array(z.string().trim().min(1).max(32)).max(12).optional(),
+    links: z.array(JournalLinkSchema).max(20).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'Provide at least one field' });
+
+export const JournalListResponseSchema = z.object({ entries: z.array(JournalEntrySchema) });
