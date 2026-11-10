@@ -38,6 +38,22 @@ thing leaves the server as a checksummed JSON file that imports back as a fresh 
 - **No AI by default.** Nothing calls out to a model today. The planned Phase 5 adapter is
   per-campaign opt-in with egress disclosure — it will never be a requirement.
 
+## Screenshots
+
+| Play — sheet, dice, and a strong hit on a match                                          | World & journal — people, places, and the links between them                        |
+| ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| ![Play view: character sheet and a strong hit roll with dice](docs/screenshots/play.png) | ![World and journal view with linked people and places](docs/screenshots/world.png) |
+| **Map — tap to drop markers, linked to places**                                          | **Journal — searchable, linked to the world**                                       |
+| ![Map view with placed markers](docs/screenshots/map.png)                                | ![Journal view with entries and link chips](docs/screenshots/journal.png)           |
+
+<div align="center">
+
+![Mobile play view at 390px](docs/screenshots/mobile.png)
+
+_The same campaign at 390 px — the sheet pips, rolls and history all work one-handed._
+
+</div>
+
 ## Requirements
 
 - Node.js 22 LTS (`.nvmrc` pins it; the host may run newer)
