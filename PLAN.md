@@ -497,3 +497,44 @@ cache (the image is fetched on demand).
 Next: Phase 5 — the optional AI layer, or Phase 6 hardening (backup/restore drill, accessibility
 pass, multi-arch images). The release checklist still wants the backup drill and an accessibility
 review more than it wants AI.
+
+## Phase 6a delivery record — backup and restore drill (2026-11-10)
+
+Delivered: `infra/backup.sh` (also `pnpm db:backup`), the restore runbook in
+`docs/backup.md`, and a completed restore drill against the live data.
+
+- `pg_dump --format=custom` inside the `db` container, streamed to the host; credentials stay in
+  the container (nothing secret on a command line or in a log).
+- Every dump gets a `.sha256` sidecar and a self-check — the script fails unless
+  `pg_restore --list` can read the archive back and finds `campaigns` in the catalog.
+- Retention: last 14 dumps (`MYTHWEAVER_KEEP`), `umask 077` because dumps carry password hashes.
+- Restore path: restore the custom archive into an **empty** database, then boot the stack — the
+  preserved `drizzle.__drizzle_migrations` makes the migrate gate a no-op.
+
+Evidence (this host, live data):
+
+| Step                                    | Result                                                                       |
+| --------------------------------------- | ---------------------------------------------------------------------------- |
+| `pnpm db:backup`                        | 45,661-byte dump, `sha256sum -c` OK, self-check passed                       |
+| Restore into scratch db `drill_restore` | clean; all 14 table counts match the live db                                 |
+| Map image integrity                     | `md5(image)` identical on both sides (`995d213f…`) — the `bytea` survived    |
+| `drizzle.__drizzle_migrations`          | 6 on both sides — the stack's migration gate will accept the restored schema |
+| Real `migrate` container vs restored db | exit 0, still 6 migrations — no double-apply                                 |
+| Scratch db dropped afterwards           | live volume never touched                                                    |
+
+Findings:
+
+1. **This image's pg_dump treats `--file=-` as a literal filename.** The first run wrote the dump
+   to a file named `-` inside the container while the host captured 0 bytes — silently, exit 0.
+   The same quirk showed on the restore side (`pg_restore --list -` read the container file, not
+   stdin). The script uses plain stdout/stdin now; the self-check exists precisely for this class
+   of failure, where the tool reports success and the artifact is empty.
+2. **The empty-file failure is worse than a crash.** A 0-byte dump plus a green exit code is the
+   state most likely to survive unnoticed until the day it matters. Any backup script should
+   read its own artifact back before claiming victory.
+
+Known gaps: no WAL archiving (recovery point = cron cadence), no off-host copy, no
+row-level restore — all recorded in `docs/backup.md` with the reasoning for accepting them on a
+single-user install.
+
+Next in Phase 6: the accessibility review, then multi-arch CI images and the threat-model pass.

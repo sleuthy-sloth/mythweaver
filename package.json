@@ -24,7 +24,8 @@
     "stack:up": "docker compose up --build",
     "stack:down": "docker compose down",
     "admin:bootstrap": "pnpm --filter @mythweaver/api admin:bootstrap",
-    "test:integration": "pnpm --filter @mythweaver/api test:integration"
+    "test:integration": "pnpm --filter @mythweaver/api test:integration",
+    "db:backup": "infra/backup.sh"
   },
   "devDependencies": {
     "eslint": "^9.17.0",

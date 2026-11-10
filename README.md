@@ -55,17 +55,18 @@ needed. To point the web app at a different API, set `VITE_API_BASE_URL`.
 
 ## Scripts
 
-| Command                     | What it does                                          |
-| --------------------------- | ----------------------------------------------------- |
-| `pnpm dev`                  | API (tsx watch) and web (Vite) together               |
-| `pnpm build`                | Production bundle for API (esbuild) and web (Vite)    |
-| `pnpm test`                 | Unit tests for every package                          |
-| `pnpm typecheck`            | `tsc --noEmit` per package                            |
-| `pnpm lint` / `pnpm format` | ESLint / Prettier                                     |
-| `pnpm db:generate`          | Generate a migration from `apps/api/src/db/schema.ts` |
-| `pnpm db:migrate`           | Apply pending migrations to `DATABASE_URL`            |
-| `pnpm test:integration`     | API tests against a real PostgreSQL (needs the db up) |
-| `pnpm admin:bootstrap`      | Create the first operator account — see below         |
+| Command                     | What it does                                                                                               |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`                  | API (tsx watch) and web (Vite) together                                                                    |
+| `pnpm build`                | Production bundle for API (esbuild) and web (Vite)                                                         |
+| `pnpm test`                 | Unit tests for every package                                                                               |
+| `pnpm typecheck`            | `tsc --noEmit` per package                                                                                 |
+| `pnpm lint` / `pnpm format` | ESLint / Prettier                                                                                          |
+| `pnpm db:generate`          | Generate a migration from `apps/api/src/db/schema.ts`                                                      |
+| `pnpm db:migrate`           | Apply pending migrations to `DATABASE_URL`                                                                 |
+| `pnpm db:backup`            | Checksummed `pg_dump` of the compose db to `~/backups/mythweaver` — see [docs/backup.md](./docs/backup.md) |
+| `pnpm test:integration`     | API tests against a real PostgreSQL (needs the db up)                                                      |
+| `pnpm admin:bootstrap`      | Create the first operator account — see below                                                              |
 
 ## Layout
 
