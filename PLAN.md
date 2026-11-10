@@ -46,6 +46,10 @@ that list and nothing more.
    it before a public release costs one file.
 2. **Repository stays local** for now: no GitHub remote is created and nothing is pushed, because
    publishing is a public, hard-to-reverse action. The user can ask for `gh repo create`.
+   → **Resolved 2026-11-10:** the user asked for the public repo; `sleuthy-sloth/mythweaver`
+   created and pushed after the publication-hygiene sweeps (no secrets in tree or history;
+   commit identity `sleuthy-sloth <spkoehl@gmail.com>` matches the user's other public repos).
+   Assumption 1 (MIT for code) is confirmed by the same decision.
 3. **Rules content is not vendored in Phase 1.** Only mechanics/placeholder content ships until
    a document-by-document license check is recorded in `docs/content-provenance.md`.
 4. **Postgres 17** in Compose (17-alpine has arm64 images and matches the host client).

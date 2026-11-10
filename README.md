@@ -1,18 +1,42 @@
 # Mythweaver
 
-Self-hosted, multi-user, offline-first platform for solo tabletop role-playing. First ruleset:
-Ironsworn. No third-party accounts, no mandatory AI, and your campaign data stays on your server.
+[![CI](https://github.com/sleuthy-sloth/mythweaver/actions/workflows/ci.yml/badge.svg)](https://github.com/sleuthy-sloth/mythweaver/actions/workflows/ci.yml)
 
-**Status: Phase 4c — world, journal, maps, export/import.** Sign in, open a campaign, play with the network gone, and
-your edits and rolls queue and send themselves when you reconnect. The shell is installed by a
-service worker, so the app boots without a connection; campaign data lives in IndexedDB and rolls
-made offline are re-derived by the server from the dice you rolled.
-Campaigns now hold people, factions, places, links between them, and a searchable journal — and a
-campaign leaves the server as a checksummed JSON file that imports back as a new campaign, map and
-markers included.
-See [PLAN.md](./PLAN.md), [docs/maps.md](./docs/maps.md), [docs/exchange.md](./docs/exchange.md),
-[docs/world.md](./docs/world.md), [docs/rules-coverage.md](./docs/rules-coverage.md)
-and [docs/offline.md](./docs/offline.md).
+Self-hosted, offline-first platform for solo tabletop role-playing. First ruleset: **Ironsworn**.
+
+Play on a plane, in a cabin, on a phone with one bar of signal — the app keeps working, queues
+your rolls and edits, and settles up with the server when you're back. Your campaigns live in
+your own Postgres, on your own hardware, behind your own reverse proxy. No cloud account, no
+subscription, and no AI in the loop unless you ask for one.
+
+Multi-user: a household or a friend group can each hold an account on one install, and campaign
+data is isolated per member.
+
+**Status: Phase 4c, hardening begun.** Sign in, open a campaign, play with the network gone, and
+your edits and rolls queue and send themselves when you reconnect. Campaigns hold a character
+sheet, people, factions, places, a searchable journal, and a map with markers — and the whole
+thing leaves the server as a checksummed JSON file that imports back as a fresh copy. See
+[PLAN.md](./PLAN.md) for the honest list of what exists and what doesn't yet.
+
+## What it does
+
+- **Ironsworn play.** Character sheet with stats, meters, momentum (derived reset and burn),
+  debilities and XP. Roll action + two challenge dice with a tap; strong hit, weak hit or miss —
+  matches included — with the dice rendered as physical objects and every roll kept in permanent
+  history.
+- **A world with a memory.** People, factions and places; relationships between them; a journal
+  with explicit links and full-text search.
+- **Maps.** One uploaded map image per campaign, tap to place markers, link markers to places.
+  Coordinates are normalized, so markers stay put on any screen size.
+- **Take the campaign with you.** One-click export to a checksummed, versioned JSON file; import
+  previews it, validates every reference, and rebuilds the campaign — map and markers included —
+  as a fresh copy. Version 1 files still import.
+- **Offline-first, genuinely.** A service worker precaches the app shell; campaigns live in
+  IndexedDB; a durable outbox replays queued writes in order, and the server re-derives offline
+  rolls from the dice rather than trusting a claimed result. Conflicts ask which value to keep
+  instead of silently overwriting.
+- **No AI by default.** Nothing calls out to a model today. The planned Phase 5 adapter is
+  per-campaign opt-in with egress disclosure — it will never be a requirement.
 
 ## Requirements
 
@@ -24,7 +48,7 @@ and [docs/offline.md](./docs/offline.md).
 ## Quick start (whole stack in containers)
 
 ```bash
-git clone <this repo> mythweaver && cd mythweaver
+git clone https://github.com/sleuthy-sloth/mythweaver.git mythweaver && cd mythweaver
 cp .env.example .env          # then set POSTGRES_PASSWORD to something real
 docker compose up --build
 ```
@@ -38,7 +62,7 @@ The `migrate` service runs once, applies migrations, and exits; `api` waits for 
 Re-running `up` re-runs it harmlessly (Drizzle tracks applied migrations).
 
 Stop with `docker compose down`; add `-v` to also delete the database
-volume (destroys all data).
+volume (destroys all data — take a backup first, see below).
 
 ## Local development
 
@@ -47,7 +71,7 @@ cp .env.example .env
 docker compose up -d db   # database only
 pnpm install
 pnpm db:migrate
-pnpm dev                                              # API :8080 + Vite :5173
+pnpm dev                  # API :8080 + Vite :5173
 ```
 
 Vite proxies `/api` to the API, so the browser always talks same-origin and no CORS setup is
@@ -77,7 +101,7 @@ apps/web/          React + Vite + Tailwind. Sign-in, campaigns, sheet, rolls; PW
 packages/contracts Zod schemas shared by server and browser.
 packages/rules-core      System-agnostic rules types (Rng, Outcome, tracks, moves).
 packages/rules-ironsworn Ironsworn mechanics: dice, momentum, progress, action rolls.
-infra/             Compose, Dockerfiles, nginx.
+infra/             Compose, Dockerfiles, nginx, backup script.
 docs/              Architecture, operations, content provenance.
 ```
 
@@ -115,6 +139,12 @@ codes (`bad_request`, `unauthorized`, `not_found`, …). Clients parse codes, ne
 2. Create a campaign, open it, create a character sheet.
 3. Pick a stat, add any move adds, optionally burn momentum, and roll. Every roll is stored with
    its dice; the sheet remembers momentum, meters and debilities.
+4. Build the world from the **World & journal** tab: people, factions, places, the edges between
+   them, and journal entries linked to any of them.
+5. Upload a map from the campaign header and tap it to place markers — link a marker to a place
+   and it means something.
+6. **Export** downloads the whole campaign as one checksummed JSON file; **Import** on the
+   campaigns list previews it first, then builds a fresh copy.
 
 The UI is mobile-first and works at 390 px without horizontal scroll; desktop uses a two-column
 play view. No AI is involved anywhere in this flow.
@@ -132,7 +162,20 @@ rolls in IndexedDB. Open a campaign once with a connection and it is available o
 - The strip at the top of a campaign says when you are offline and how many changes are waiting.
 
 Not yet: creating a campaign offline, and syncing between two devices (each device has its own
-cache; the server is the meeting point).
+cache; the server is the meeting point). Full design: [docs/offline.md](./docs/offline.md).
+
+## Backups
+
+Campaign data lives in the Postgres volume and nowhere else, so one dump protects everything:
+accounts, campaigns, characters, rolls, the journal, the map images.
+
+```bash
+pnpm db:backup   # ~/backups/mythweaver/mythweaver-<timestamp>.dump + .sha256
+```
+
+Each dump is read back with `pg_restore --list` before the script claims success, and the runbook
+covers restoring into an empty database, where the stack's own migration gate confirms the
+schema. Full procedure and accepted limits: [docs/backup.md](./docs/backup.md).
 
 ## Accounts
 
@@ -167,8 +210,27 @@ login response but drop the cookie. Either put TLS in front (the intended setup)
 - Secrets come from `.env` / the environment. There are no default credentials anywhere; the
   first account is created with `pnpm admin:bootstrap`.
 
+## Design docs
+
+| Doc                                                        | What it covers                                       |
+| ---------------------------------------------------------- | ---------------------------------------------------- |
+| [docs/architecture.md](./docs/architecture.md)             | Services, schema, sync model, security baseline      |
+| [docs/offline.md](./docs/offline.md)                       | Service worker, Dexie cache, outbox, conflict policy |
+| [docs/world.md](./docs/world.md)                           | People, factions, places, journal                    |
+| [docs/maps.md](./docs/maps.md)                             | Map uploads, normalized markers, attribution         |
+| [docs/exchange.md](./docs/exchange.md)                     | Export format v2, import validation                  |
+| [docs/rules-coverage.md](./docs/rules-coverage.md)         | Which Ironsworn mechanics the engine implements      |
+| [docs/content-provenance.md](./docs/content-provenance.md) | Licensing of any bundled game content                |
+| [docs/backup.md](./docs/backup.md)                         | Backups and the restore runbook                      |
+| [PLAN.md](./PLAN.md)                                       | Phase-by-phase plan and delivery records             |
+
 ## License
 
-Application code: MIT ([LICENSE](./LICENSE)). Game content is licensed separately and tracked in
+Application code: MIT ([LICENSE](./LICENSE)).
+
+Ironsworn was created by Shawn Tomkin and its System Reference Document is published by Tomkin
+Press under [CC BY 4.0](https://tomkinpress.com/pages/licensing). Mythweaver currently ships **no**
+Ironsworn text, tables or art — only mechanics implemented from scratch — and any future bundled
+content will carry per-file attribution in
 [docs/content-provenance.md](./docs/content-provenance.md). Mythweaver is independent software and
 is not affiliated with or endorsed by Shawn Tomkin or Tomkin Press.
